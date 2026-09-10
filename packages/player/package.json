@@ -1,0 +1,19 @@
+{
+  "name": "@sq1/player",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Square One player: the shell, canvas presentation, touch controls, and the audio graph. Main thread only.",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@sq1/cart": "*",
+    "@sq1/core": "*",
+    "@sq1/runtime": "*"
+  },
+  "scripts": {
+    "test": "vitest run"
+  }
+}

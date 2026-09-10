@@ -1,0 +1,81 @@
+# `redlevels` -- the ten levels of Red Breaker, and nothing else.
+#
+# A `content` module: it holds no code and no art, only the two chunks
+# `modules/FORMATS-breakout.md` describes. `breakout@1.0.0` reads them out of
+# RAM and has never heard of this pack; point a recipe at a different one and it
+# is a different game on the same engine.
+#
+# HOW TO CHANGE IT
+# ----------------
+# Edit the levels in gen.mjs -- twelve strings of sixteen characters per level,
+# one character per block -- and then regenerate:
+#
+#     node modules/redlevels/gen.mjs
+#
+# levels.map and levels.dat are OUTPUT. Never edit them: a .bin cannot be
+# reviewed, and a block changed there and not in gen.mjs is lost the next time
+# anyone regenerates. gen.mjs also CHECKS every level before it writes anything
+# -- see below -- so a level that would softlock fails the build rather than the
+# playtest.
+#
+# THE TWO FILES
+# -------------
+#     levels.map   3072 bytes. The `MAP ` chunk, installed at 0x4300. The map is
+#                  128 tiles wide; level L is the 16 x 12 block at column
+#                  (L % 8) * 16, row (L / 8) * 12. Ten levels reach map row 23,
+#                  so this fills 3072 of the region's 8192 bytes and leaves room
+#                  for thirty more levels without changing anything.
+#     levels.dat   160 bytes. The `DATA` chunk, installed at 0x7800: ten 16-byte
+#                  headers, level L at offset L * 16, bytes 10..15 reserved and
+#                  zero. The engine's own state begins after them.
+#
+# A TILE BYTE IS A BLOCK TYPE, 0..8, exactly as the format's table has it.
+#
+# WHAT gen.mjs REFUSES TO WRITE
+# -----------------------------
+# Every one of these is a check that runs before either file is written, because
+# a level pack's failure mode is not "looks wrong" -- it is "the player cannot
+# finish level eight and there is nothing on screen to tell them why".
+#
+#   * a grid that is not 12 rows of 16, or holds a character that is not a type
+#   * a MECHANIC that is not the level's own index
+#   * a level with no block that counts toward the clear
+#   * RED_COUNT above 4, or lower than the level before it
+#   * BALL_SPEED that does not rise, or PADDLE_W that does not narrow
+#   * a shielded block without AMMO_START above the shielded count, SIDE_PADS,
+#     and `gun` in DROP_MASK -- three independent guarantees that the gun exists
+#   * a solid block anywhere below a shielded one, which would block the shot
+#     that is the only way to break it
+#   * ANY counting block a flood fill from the open field below cannot reach,
+#     treating type 5 as the only wall -- the softlock check
+#   * a drifting row reaching a column that slides off the screen edge
+#   * a header switching on a mechanic the level has not reached, or setting
+#     DRIFT_SPEED with no drifter in the grid
+#
+# THE ENGINE'S DEFAULTS THIS PACK IS TUNED AGAINST are `field_top = 10`,
+# `block_h = 6`, `paddle_y = 110` and `drift_range = 8`. They decide how much
+# reaction time a red block in a given row gives, which is the pack's central
+# design number; gen.mjs repeats them at the top of its check section and prints
+# the resulting frame counts. A recipe that overrides one of the four should
+# change them there and look at the table again.
+
+[module]
+kind    = "content"
+name    = "redlevels"
+version = "1.0.0"
+
+[provides]
+# Ten levels of 16 x 12, matching the engine's `level_count`, `grid_w` and
+# `grid_h` defaults. A recipe that raises `level_count` past this reads an
+# eleventh header out of zeroed RAM.
+levels = 10
+grid_w = 16
+grid_h = 12
+# Levels laid across the map before the next band starts, = 128 / grid_w. The
+# engine's `map_band` knob is the same number seen from the other side.
+band   = 8
+
+# The two cart chunks this module supplies, keyed by the chunk they become.
+[files]
+map  = "levels.map"
+data = "levels.dat"

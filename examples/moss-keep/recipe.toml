@@ -1,0 +1,128 @@
+# Moss Keep
+#
+# A recipe: four modules and the numbers that turn them into one game. There is
+# no code in this directory and there does not need to be -- the engine is
+# `topdown`, the art is `overworld` and `wanderer`, the colours are `sweetie16`,
+# and everything below is the part that makes this cart different from the next
+# one built out of the same four.
+#
+#     sq1 stamp examples/moss-keep      -> examples/moss-keep.cart
+#
+# THE POINT OF THIS PARTICULAR CART is that `sweetie16` was chosen for a cave and
+# is used here for a field in daylight, and that the engine driving it has never
+# heard of grass, water or doors. Cave Runner and Moss Keep share a palette and
+# nothing else; they are two genres out of one module system, which is the claim
+# milestone M6 exists to test.
+#
+# TO MAKE IT FEEL DIFFERENT, change [tuning]. A slower walker and a longer swing
+# make a deliberate game; a wider chase_range and a faster chaser make a tense
+# one. Nothing here needs the engine to be edited.
+
+[cart]
+title   = "Moss Keep"
+author  = "square one"
+payload = "script/js1"
+
+[modules]
+engine    = "topdown@1.0.0"
+palette   = "sweetie16@1.0.0"
+tileset   = "overworld@1.0.0"
+spriteset = "wanderer@1.0.0"
+
+
+[tuning]
+
+# --- the world -------------------------------------------------------------
+# The overworld is a pure function of this number. It is written down here rather
+# than taken from a clock so that every player gets the same field, and so that
+# the cart id -- which is a hash of the bytes -- names one particular game.
+level_seed = 20260909
+
+map_width  = 64
+map_height = 64
+
+# Rock and water together are a third of the map, which leaves enough open
+# ground that the lanes between chunks are not the only way anywhere.
+wall_chance      = 20
+water_chance     = 14
+tree_chance      = 34
+flower_chance    = 30
+bramble_chance   = 16
+coin_chance      = 30
+key_chance       = 10
+chaser_chance    = 18
+patroller_chance = 18
+
+# The walker starts near the north-west corner, three chunks in. Its own chunk
+# and the eight around it are forced to open ground, so tiles 4..15 either way
+# are safe whatever the seed does.
+start_tile_x = 8
+start_tile_y = 8
+
+# The keep sits diagonally across the map from the start, so getting to it is
+# most of the game. Its door faces south, and the key for it is two tiles west
+# and four south of the south-west corner.
+keep_x = 40
+keep_y = 40
+keep_w = 9
+keep_h = 7
+
+# --- feel ------------------------------------------------------------------
+# Three overrides and nothing else. A slightly brisker walker than the engine's
+# default, because this map is 512 pixels across; a patroller a shade slower, so
+# a corridor of them can be read before it is entered; and a longer look-ahead,
+# because a scrolling world's whole job is to show you what is coming.
+move_speed       = 0.95
+patrol_speed     = 0.28
+camera_lookahead = 16
+
+# --- which tile is which ---------------------------------------------------
+# The engine knows nothing about the overworld pack; these lines are the entire
+# binding between them. The numbers come from the [names] table in
+# modules/overworld/module.toml.
+tile_grass      = 1    # grass
+tile_grass_alt  = 2    # grass_tuft
+tile_flower     = 3    # grass_flower
+tile_wall       = 11   # wall
+tile_wall_top   = 12   # wall_top, the lit cap
+tile_water      = 23   # water
+tile_shore      = 25   # shore_n, where the pond meets the grass
+tile_tree       = 46   # tree
+tile_bramble    = 29   # bramble -- hazard, and NOT solid
+tile_door       = 34   # door -- carries the pack's `door` flag
+tile_door_open  = 35   # door_open -- carries nothing, which is the point
+tile_floor      = 38   # floor, inside the keep
+
+# The three bit values the tileset uses for its three flags. They are written
+# here because the format has no way for the engine to read them from the
+# tileset that declares them; see modules/topdown/INTERFACE-NOTES.md. Copy them
+# from [provides] in modules/overworld/module.toml, and if you change the pack,
+# change them here too -- nothing will tell you.
+solid_flag  = 1
+hazard_flag = 2
+door_flag   = 4
+
+# --- which sprite is which -------------------------------------------------
+# From the [names] table in modules/wanderer/module.toml. `sprite_walk` is the
+# base of the whole eight-cell block; the engine counts direction * 2 + frame
+# from it, in the order down, up, left, right.
+sprite_walk      = 64
+sprite_slash     = 72
+sprite_chaser    = 76
+sprite_patroller = 78
+sprite_coin      = 80
+sprite_key       = 81
+
+# --- presentation ----------------------------------------------------------
+# bg_color is only ever seen past the rim of the map, so it is the darkest slot
+# there is. The minimap borrows the moss ramp for open ground and the stone ramp
+# for walls, so it reads as a small picture of the same world.
+bg_color             = 1
+hud_color            = 6
+minimap_show         = true
+minimap_x            = 92
+minimap_y            = 2
+minimap_size         = 32
+minimap_floor_color  = 7
+minimap_wall_color   = 4
+minimap_player_color = 13

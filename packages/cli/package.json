@@ -1,0 +1,19 @@
+﻿{
+  "name": "@sq1/cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "sq1 command line: build, validate, hash, inspect. Build tool - never ships to a player.",
+  "main": "./src/index.ts",
+  "bin": {
+    "sq1": "./src/bin.ts"
+  },
+  "dependencies": {
+    "@sq1/cart": "*",
+    "@sq1/core": "*",
+    "@sq1/stamper": "*"
+  },
+  "scripts": {
+    "test": "vitest run"
+  }
+}

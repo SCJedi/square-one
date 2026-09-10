@@ -1,0 +1,184 @@
+# `arcade` -- the sixteen colours Red Breaker is played in, and the sixty-four
+# cells it is drawn with.
+#
+# WHY ONE MODULE SHIPS BOTH
+# -------------------------
+# A module sits in exactly ONE recipe slot -- the stamper refuses a `palette`
+# used as a `spriteset` -- and `breakout`'s `[requires] palette = true` is the
+# slot this pack has to fill. But `[provides] data` is read WITHOUT REGARD TO
+# KIND: `mergeArt` copies every layer's cells to the sheet at `[provides] base`
+# and its flags to SPRITE_FLAGS + base, whatever `kind` that layer declared. So
+# this manifest ships the sixteen live slots AND the sixty-four cells, and
+# `examples/red-breaker/recipe.toml` gets both from the one line it already has.
+#
+# The alternative -- splitting the art into a second module so it could be a
+# `spriteset` -- would put the palette and the art it is drawn for in two
+# manifests that have to be edited together, which is exactly the arrangement
+# gen.mjs's REMAP table exists to avoid.
+#
+# HOW TO CHANGE IT
+# ----------------
+# The art and the palette are both in gen.mjs -- one hex digit per pixel, one
+# string per row -- and then:
+#
+#     node modules/arcade/gen.mjs
+#
+# It prints the `entries` line below and rewrites tiles.bin. NEVER HAND-EDIT
+# tiles.bin: a .bin cannot be reviewed, and a pixel changed there and not in
+# gen.mjs is lost the next time anyone regenerates.
+#
+# WHAT A PALETTE PACK IS ON THIS CONSOLE
+# --------------------------------------
+# Square One has 64 hardware colours, fixed in silicon and identical on every
+# player, and sixteen LIVE SLOTS that each point at one of them. The framebuffer
+# stores a slot number, never a colour. So a palette pack is not a list of RGB
+# triples -- it is a CHOICE of sixteen from the console's 64, and `entries[i]` is
+# the hardware entry live slot `i` shows.
+
+[module]
+kind    = "palette"
+name    = "arcade"
+version = "1.0.0"
+
+[provides]
+colors = 16
+
+# THE RULE THE WHOLE TABLE IS BUILT AROUND: SLOTS 11, 12 AND 14 ARE THE ONLY
+# WARM COLOURS THIS CONSOLE CAN SHOW, AND THEY ARE DANGER.
+#
+# Red Breaker's mechanic is that breaking a type-4 block turns the ball red and
+# the player has ONE CONTACT to get their own paddle out of the way. There is no
+# warning text: the ball changes colour, and that is the whole notice. A palette
+# where anything else on screen is red, orange or pink spends the mechanic's only
+# channel on a power-up icon. So the thirteen slots that are not danger are drawn
+# from the cool half of the hardware palette, and the three that are danger are
+# one hue in three steps. Nothing else is allowed in -- which is why the `life`
+# drop is a WHITE HEART rather than the red one every instinct asks for. An extra
+# life is the opposite of danger, and it is the one icon that most has to not be
+# red.
+#
+# WHY NOT `sweetie16`, which every other pack in this repository uses. It is a
+# good cave palette and it is wrong here for a reason that is arithmetic rather
+# than taste. `breakout`'s `drop_color` names the FIRST OF SIX CONSECUTIVE
+# SLOTS, one per drop kind, and against sweetie16 the natural start is slot 8 --
+# which puts wide, slow, gun, multi, life and catch on slots 8..13, and slot 11
+# of sweetie16 is its danger red. The `multi` power-up would fall through the
+# field in exactly the colour the ball turns when it is about to kill you. This
+# table starts the drops at slot 2 and puts danger red at 11, which is where
+# `color_red`, `ball_red_color` and `beam_color` already default to.
+#
+#   slot  hw  rgb        role  what it is in this game
+#   ----  --  ---------  ----  ---------------------------------------------
+#     0    0  #0d0b12     0    void. The transparent slot; the darkest there is.
+#     1    1  #1c1a2b     1    the field, and every outline drawn on top of it.
+#     2   12  #6ec27a     3    green.      WIDE drop, and a TOUGH block.
+#     3   14  #4a9dd4     5    blue.       SLOW drop, and a PLAIN block.
+#     4   10  #f7d46b     c    gold.       GUN drop, PRIZE block, the shot.
+#     5   15  #9b6fd4     7    purple.     MULTI drop, and a HARD block.
+#     6    6  #ffffff     a    white.      LIFE drop, the paddle, and the ball.
+#     7   44  #a4d8ab     2    pale mint.  CATCH drop, and a DRIFTER block.
+#     8   11  #3f7d4e     4    deep green. A TOUGH block that has taken a hit.
+#     9    3  #6b6486     8    mid slate.  A SOLID block, and a spent HARD one.
+#    10    4  #a8a2bd     9    silver.     A SHIELDED block's frame.
+#    11    8  #d94f5c     d    DANGER RED. The red block, the red ball, the beam.
+#    12    9  #f2934a     e    hot orange. Danger, bright: the pulse and the flare.
+#    13   13  #2c5f8a     6    deep blue.  The side charge pads, and blue's shadow.
+#    14   24  #873139     f    dark blood. Danger, dark: the hazard tape.
+#    15    5  #e8e6f0     b    near-white. The HUD, and the paddle's second row.
+#
+# Slots 12 and 14 were chosen and unused in the rectangle-drawing version of this
+# game. They are spent now, and only on danger: 12 is the red block's pulse and
+# the red ball's flare, 14 is the hazard tape and the red ball's rim. The danger
+# ramp is a ramp, and it is the only ramp this palette has.
+entries = [0, 1, 12, 14, 10, 15, 6, 44, 11, 3, 4, 8, 9, 13, 24, 5]
+
+# The slot the console treats as transparent for spr, sspr, map and print. It is
+# 0 at boot and this pack does not move it; stated so a recipe can see it. The
+# HUD is printed, so slot 0 has to stay the transparent one.
+transparent = 0
+
+# --- the sprite sheet --------------------------------------------------------
+#
+# THE LAYOUT IS modules/FORMATS-breakout-art.md's TABLE, CELL FOR CELL. That file
+# owns it; this pack draws it. Cell `n` sits at sheet pixel
+# `((n & 15) * 8, (n >> 4) * 8)` and the engine addresses it as `sprite_base + n`.
+#
+#     bytes 0..2047     pixels: 32 rows of 64 bytes -- 128 pixels per row at
+#                       4bpp, EVEN x in the LOW nibble. Four sheet rows of
+#                       sixteen cells = 64 cells of 8 x 8.
+#     bytes 2048..2111  flags: one byte per cell, in cell order.
+#
+# BASE 0 IS DELIBERATE. The pack fills the sheet's first four rows, so
+# `sprite_base = 0` and a cell number in the format's table is also a sprite
+# index. The console's "cell 0 is never drawn" rule is a rule about `gfx.map`,
+# and nothing here is drawn by `gfx.map` -- a block is 8 x 6 and `gfx.map` draws
+# 8 x 8 on an 8-pixel pitch, which is the mismatch `sspr` exists to solve. Cell 0
+# holds the type-1 block and has ink in it, which also matters: the engine
+# decides at boot whether to blit or to fall back to rectangles by reading the
+# bytes of the cell at `sprite_base`, because 0 is a legitimate base and a knob
+# cannot tell it apart from "unset".
+#
+# EVERY CELL THE FORMAT NAMES IS DRAWN. Thirteen of the sixty-four are blank on
+# purpose: 44..47 and 56..63, which the format reserves as spare, and 55, which
+# it reserves for a ball trail this engine does not draw. They are blank rather
+# than filled because a cell with art in it that nothing blits is a thing a later
+# reader has to disprove.
+data   = "tiles.bin"
+cells  = 64
+base   = 0
+cell_w = 8
+cell_h = 8
+
+# A BLOCK IS 8 WIDE AND 6 TALL, and the block cells are drawn that way: art in
+# rows 0..5, rows 6 and 7 empty. Stated here because it is the one number an
+# engine has to agree with to draw this pack correctly -- `gfx.sspr(cx, cy, 8,
+# 6, x, y)` -- and gen.mjs refuses to write tiles.bin if a pixel strays below it.
+block_w = 8
+block_h = 6
+
+# The flags this pack marks, and the SPRITE_FLAGS BIT VALUE each one uses. These
+# are claims about tiles.bin and the stamper now checks them against the bytes:
+# a name no cell carries is refused at stamp time. Cells 0..12 are the thirteen
+# block faces and carry all of these between them; nothing else on the sheet
+# carries any, because everything else is a sprite the engine places by hand.
+#
+# An engine that reads a block's behaviour out of SPRITE_FLAGS rather than out of
+# its map byte wants exactly this table, and a knob named `<x>_flag` must hold
+# the same number -- the stamper compares those two directly.
+flags          = ["solid", "breakable", "red", "shield", "drift", "prize"]
+solid_flag     = 1
+breakable_flag = 2
+red_flag       = 4
+shield_flag    = 8
+drift_flag     = 16
+prize_flag     = 32
+
+# Which slot each of the engine's colour knobs wants. Advisory: the numbers in
+# `entries` are the truth and these are the bindings a recipe writes, gathered
+# here so nobody has to re-derive them from the table above.
+# `examples/red-breaker/recipe.toml` sets exactly these.
+[names]
+bg             = 1
+drop_first     = 2    # drop_color: wide 2, slow 3, gun 4, multi 5, life 6, catch 7
+plain          = 3
+tough          = 2
+damaged        = 8
+red            = 11
+solid          = 9
+shield         = 10
+drift          = 7
+prize          = 4
+paddle         = 6
+ball           = 6
+ball_red       = 11
+beam           = 11
+pad            = 13
+shot           = 4
+hud            = 15
+danger_bright  = 12
+danger_dark    = 14
+
+# Which cell each drawn thing is, this manifest does NOT restate.
+# modules/FORMATS-breakout-art.md owns that table and three modules read it;
+# a second copy here would be a second thing to keep true. README.md in this
+# directory says what is drawn in each cell and where in the cell it sits.

@@ -1,0 +1,66 @@
+# `hero` -- the runner, a crawler and a gem.
+#
+# HOW TO CHANGE IT
+# ----------------
+# Edit the art in gen.mjs and regenerate:
+#
+#     node modules/hero/gen.mjs
+#
+# sprites.bin is OUTPUT. See modules/caves/module.toml for why a .bin is never
+# hand-edited.
+#
+# THE FILE FORMAT
+# ---------------
+#     bytes 0..1023     pixels, 16 rows of 64 bytes, in the console's sheet
+#                       layout. Two sheet rows of sixteen cells = 32 cells.
+#     bytes 1024..1055  flags, one byte per cell. All zero: these are entity
+#                       sprites, and the flag byte is what a TILESET uses.
+#
+# The stamper copies the pixels into the sheet starting at cell `base` and the
+# flags to SPRITE_FLAGS + base.
+#
+# A TALL SPRITE IS TWO CELLS
+# --------------------------
+# The runner is 8 x 16, which the console draws as gfx.spr(n, x, y, 1, 2): cell
+# n and cell n + 16, because the sheet is one 128-pixel-wide picture and the
+# cell below n is sixteen indices later. So frame k occupies cells 64 + k and
+# 80 + k, and `[names]` below lists the FIRST of the two -- the number an engine
+# knob wants.
+#
+# The runner is drawn facing right only. An engine mirrors it with gfx.spr's
+# flip argument rather than carrying a second set of frames, which is why there
+# is no left-facing art here and should not be.
+#
+# DRAWN FOR the `sweetie16` palette.
+
+[module]
+kind    = "spriteset"
+name    = "hero"
+version = "1.0.0"
+
+[provides]
+sprites = 32
+cell_w  = 8
+cell_h  = 8
+# The sheet cell this pack starts at: 64 is the start of sheet row 4, leaving
+# rows 0..3 -- cells 0..63 -- to the tileset.
+base    = 64
+data    = "sprites.bin"
+
+# Frame indices, as absolute sheet cells. Advisory, like the caves table: these
+# are the numbers a recipe puts in the engine's sprite_* knobs.
+[names]
+idle    = 64   # and 65: the engine alternates the two
+run     = 66   # 66..69, four frames
+jump    = 70
+fall    = 71
+hurt    = 72
+crawler = 73   # and 74
+gem     = 75
+
+# How big each thing is, for an engine that wants to size a collision box from
+# the art rather than from a knob.
+[sizes]
+runner  = { w = 8, h = 16, cells_w = 1, cells_h = 2 }
+crawler = { w = 8, h = 8, cells_w = 1, cells_h = 1 }
+gem     = { w = 8, h = 8, cells_w = 1, cells_h = 1 }

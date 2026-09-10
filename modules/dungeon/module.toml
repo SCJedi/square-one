@@ -1,0 +1,129 @@
+# `dungeon` -- 64 tiles of cut stone, flagstone, iron, water and torchlight.
+#
+# THE SECOND TILESET FOR THE SAME ENGINE
+# --------------------------------------
+# This pack exists to be swapped for `caves` without touching a line of
+# `platformer`. It declares the interface the engine asks for -- 64 tiles at
+# base 0, marking `solid` and `hazard` on the same two bits -- and draws a
+# different world behind it. `examples/deep-run/recipe.toml` is `cave-runner`
+# with this pack in the tileset slot and a heavier [tuning] table, and it builds
+# a cart whose CODE differs from `cave-runner`'s only in the knob preamble.
+#
+# HOW TO CHANGE IT
+# ----------------
+# Edit the art in gen.mjs -- one hex digit per pixel, one string per row -- and
+# then regenerate:
+#
+#     node modules/dungeon/gen.mjs
+#
+# tiles.bin is OUTPUT. Never edit it: a .bin cannot be reviewed, and a pixel
+# changed there and not in gen.mjs is lost the next time anyone regenerates.
+#
+# THE FILE FORMAT
+# ---------------
+#     bytes 0..2047     pixels, 32 rows of 64 bytes, in the console's own sheet
+#                       layout: 128 pixels per row at 4bpp, EVEN x in the LOW
+#                       nibble. Four sheet rows of sixteen cells = 64 tiles.
+#     bytes 2048..2111  flags, one byte per tile, in tile order.
+#
+# The stamper copies the pixels into the sprite sheet starting at cell `base`
+# and the flags to SPRITE_FLAGS + base. With base = 0 both are straight copies.
+#
+# TILE 0 IS EMPTY AND IS NEVER DRAWN. That is the console's rule, not this
+# pack's: gfx.map skips tile 0 whatever the sheet holds there.
+#
+# DRAWN FOR the `sweetie16` palette -- the same sixteen colours `caves` is drawn
+# for, which is what makes the two interchangeable in a recipe without also
+# changing the palette line.
+
+[module]
+kind    = "tileset"
+name    = "dungeon"
+version = "1.0.0"
+
+[provides]
+tiles  = 64
+tile_w = 8
+tile_h = 8
+# The sheet cell this pack starts at. 0 is the top-left of the sheet, so the
+# tile index a map cell holds is also the sprite index the console draws. Same
+# as `caves`, which is why `hero` at base 64 still fits beside either of them.
+base   = 0
+data   = "tiles.bin"
+
+# The flags this pack marks, and the SPRITE_FLAGS bit each one uses. An engine
+# that requires `flags = ["solid", "hazard"]` is asking for exactly this table,
+# and these are the same two bits `caves` uses -- so a recipe that swaps the
+# packs does not have to touch the engine's solid_flag and hazard_flag knobs.
+flags      = ["solid", "hazard"]
+solid_flag  = 1
+hazard_flag = 2
+
+# What every index is. Advisory: the bytes in tiles.bin are the truth, and this
+# is here so a person writing a recipe -- or a tool offering completion for one
+# -- does not have to open the art to find out which tile is the floor.
+[names]
+empty            = 0
+brick            = 1
+brick_cracked    = 2
+brick_top        = 3
+brick_top_left   = 4
+brick_top_right  = 5
+brick_left       = 6
+brick_right      = 7
+brick_bottom     = 8
+brick_bot_left   = 9
+brick_bot_right  = 10
+pillar_block     = 11
+brick_top_worn   = 12
+flagstone        = 13
+flagstone_crack  = 14
+flagstone_top    = 15
+flagstone_left   = 16
+flagstone_right  = 17
+flagstone_bottom = 18
+slab_left        = 19
+slab_mid         = 20
+slab_right       = 21
+slab_single      = 22
+spikes_up        = 23
+spikes_down      = 24
+spikes_left      = 25
+spikes_right     = 26
+water_top        = 27
+water            = 28
+sludge_top       = 29
+sludge           = 30
+rune_small       = 31
+rune_large       = 32
+coin_heap        = 33
+iron_vein        = 34
+hook             = 35
+rubble           = 36
+crate            = 37
+barrel           = 38
+chain            = 39
+chain_end        = 40
+skull            = 41
+gravel           = 42
+torch            = 43
+sconce           = 44
+ladder           = 45
+grate            = 46
+bg_wall          = 47
+bg_wall_crack    = 48
+bg_dark          = 49
+bg_dark_fleck    = 50
+bg_column_left   = 51
+bg_column_right  = 52
+bg_arch          = 53
+bg_rubble        = 54
+bg_banner        = 55
+bg_cobweb        = 56
+brick_rune       = 57
+brick_damp       = 58
+stone_slope_l    = 59
+stone_slope_r    = 60
+rune_cluster     = 61
+marker           = 62
+checker          = 63

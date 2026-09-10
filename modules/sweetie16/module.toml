@@ -1,0 +1,63 @@
+# `sweetie16` -- the sixteen colours the caves are lit by.
+#
+# WHAT A PALETTE PACK IS ON THIS CONSOLE
+# --------------------------------------
+# Square One has 64 hardware colours, fixed in silicon and identical on every
+# player, and sixteen LIVE SLOTS that each point at one of them. The framebuffer
+# stores a slot number, never a colour. So a palette pack is not a list of RGB
+# triples -- it is a CHOICE of sixteen from the console's 64, and this file is
+# that choice: `entries[i]` is the hardware entry live slot `i` shows.
+#
+# The stamper writes these sixteen bytes to PALETTE_LIVE (0x20C0). A cart can
+# rewrite them at run time for a fade, a hit flash or a night tint, which costs
+# sixteen pokes and no redraw. That is the whole reason the indirection exists.
+#
+# WHY THESE SIXTEEN
+# -----------------
+# A cave needs a long dark-to-light neutral ramp -- most of what you see is
+# rock, and rock is only readable if its shadow, body, edge and highlight are
+# four distinct steps. That is slots 1..6. The other nine are accents that have
+# to survive being one pixel wide: growth (7..9), danger (a..c), treasure (d),
+# and something cold to put in the dark (e, f).
+#
+# Slot 0 is the console's default transparent colour, so it is the near-black
+# the art uses for "nothing here".
+#
+# The `caves` and `hero` packs are drawn against exactly this table: their hex
+# digits ARE these slot numbers. Pair them with a different palette and they
+# still draw -- they just stop being a cave.
+
+[module]
+kind    = "palette"
+name    = "sweetie16"
+version = "1.0.0"
+
+[provides]
+colors = 16
+
+# Live slot -> hardware entry. Entries 0..15 are the specification's base
+# colours; 16..31 are those darkened, 32..47 lightened, 48..63 desaturated.
+#
+#   slot  hw  rgb        what it is in the art
+#   ----  --  ---------  -------------------------------------------------
+#     0    0  #0d0b12    void. Transparent by default; the colour of nothing.
+#     1   17  #11101a    deep shadow. The back of the cave.
+#     2    1  #1c1a2b    dark navy. Background masonry.
+#     3    2  #3a3550    rock shadow.
+#     4    3  #6b6486    rock body. Most of the screen is this.
+#     5    4  #a8a2bd    rock light. Lit top and left edges.
+#     6    5  #e8e6f0    highlight. Spike tips, bone, the HUD.
+#     7   27  #274e30    moss dark.
+#     8   11  #3f7d4e    moss.
+#     9   12  #6ec27a    moss light. The grass cap on the floor.
+#    10   23  #4f1a2e    ember dark. Crawler shells and their legs.
+#    11    8  #d94f5c    danger red. Crawlers, mushrooms, hot lava.
+#    12    9  #f2934a    lava orange.
+#    13   10  #f7d46b    gold. Gems, torches, the runner's hands and face.
+#    14   13  #2c5f8a    crystal deep.
+#    15   14  #4a9dd4    crystal bright. The runner's coat, so the eye finds it.
+entries = [0, 17, 1, 2, 3, 4, 5, 27, 11, 12, 23, 8, 9, 10, 13, 14]
+
+# The slot the console treats as transparent for spr, sspr, map and print.
+# It is 0 at boot and this pack does not move it; stated so a recipe can see it.
+transparent = 0

@@ -1,0 +1,1194 @@
+<title>Square One Console</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+<style>
+:root{
+  /* SQUARE ONE hardware palette - the page borrows five of the console's own 16 colors */
+  --hw-void:#0d0b12; --hw-ink:#1c1a2b; --hw-slate:#3a3550; --hw-ash:#6b6486;
+  --hw-mist:#a8a2bd; --hw-paper:#e8e6f0; --hw-white:#ffffff;
+  --hw-wine:#7f2b4a; --hw-coral:#d94f5c; --hw-amber:#f2934a; --hw-sun:#f7d46b;
+  --hw-moss:#3f7d4e; --hw-leaf:#6ec27a; --hw-deep:#2c5f8a; --hw-sky:#4a9dd4;
+  --hw-orchid:#9b6fd4;
+
+  /* page roles - light */
+  --bg:#f6f5fa;
+  --surface:#ffffff;
+  --surface-2:#edebf4;
+  --text:#1c1a2b;
+  --text-2:#4d4763;
+  --text-3:#6f6889;
+  --rule:#dedaea;
+  --rule-strong:#bab4ce;
+  --accent:#2c5f8a;
+  --accent-2:#7f2b4a;
+  --accent-soft:#e3edf6;
+  --code-bg:#f0eef7;
+  --shadow:0 1px 2px rgba(28,26,43,.06), 0 8px 24px -12px rgba(28,26,43,.18);
+
+  /* blast-radius tier colors - mid-tones legible on both grounds */
+  --tier-a:#d9455a; --tier-b:#d97b28; --tier-c:#b8901c; --tier-d:#3d8fc4;
+  --tier-e:#3f8455; --tier-f:#4fa268; --tier-g:#7d7694;
+
+  --ok:#3f8455; --warn:#c07a1c; --bad:#d9455a;
+
+  --step-0:1.0625rem;
+  --measure:74ch;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0d0b12;
+    --surface:#15131f;
+    --surface-2:#1d1a2c;
+    --text:#e8e6f0;
+    --text-2:#b6b0c9;
+    --text-3:#8b849f;
+    --rule:#2a2740;
+    --rule-strong:#413b5c;
+    --accent:#7fb9e2;
+    --accent-2:#d98aa5;
+    --accent-soft:#17263542;
+    --code-bg:#1a1827;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.7);
+    --ok:#6ec27a; --warn:#e0ab3f; --bad:#e8697c;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0d0b12;
+  --surface:#15131f;
+  --surface-2:#1d1a2c;
+  --text:#e8e6f0;
+  --text-2:#b6b0c9;
+  --text-3:#8b849f;
+  --rule:#2a2740;
+  --rule-strong:#413b5c;
+  --accent:#7fb9e2;
+  --accent-2:#d98aa5;
+  --accent-soft:#17263542;
+  --code-bg:#1a1827;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.7);
+  --ok:#6ec27a; --warn:#e0ab3f; --bad:#e8697c;
+}
+
+*{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--text);
+  font-family:"Source Serif 4","Iowan Old Style",Georgia,serif;
+  font-size:var(--step-0);
+  line-height:1.66;
+  font-optical-sizing:auto;
+}
+::selection{background:var(--accent-soft);}
+
+.wrap{
+  max-width:1200px;
+  margin:0 auto;
+  padding:0 clamp(1rem,4vw,2.5rem);
+  display:grid;
+  grid-template-columns:15rem minmax(0,1fr);
+  gap:clamp(1.5rem,4vw,3.5rem);
+  align-items:start;
+}
+@media (max-width:960px){
+  .wrap{grid-template-columns:minmax(0,1fr);}
+}
+
+/* ---------- masthead ---------- */
+.masthead{
+  grid-column:1 / -1;
+  border-bottom:2px solid var(--text);
+  padding:clamp(2.5rem,7vw,4.5rem) 0 1.5rem;
+  margin-bottom:2.5rem;
+}
+.eyebrow{
+  font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:.7rem;
+  font-weight:500;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  color:var(--text-3);
+  display:flex;
+  flex-wrap:wrap;
+  gap:.4rem 1.1rem;
+  margin:0 0 1.1rem;
+}
+h1{
+  font-family:Archivo,"Helvetica Neue",Arial,sans-serif;
+  font-weight:700;
+  font-size:clamp(2.4rem,6.5vw,4rem);
+  line-height:.98;
+  letter-spacing:-.028em;
+  margin:0 0 .6rem;
+  text-wrap:balance;
+}
+h1 .sub{
+  display:block;
+  font-size:clamp(1rem,2.4vw,1.4rem);
+  font-weight:500;
+  letter-spacing:-.01em;
+  color:var(--text-3);
+  margin-top:.5rem;
+}
+.deck{
+  font-size:1.15rem;
+  color:var(--text-2);
+  max-width:var(--measure);
+  margin:1.2rem 0 0;
+}
+
+.status{
+  display:flex;
+  flex-wrap:wrap;
+  gap:.5rem;
+  margin-top:1.5rem;
+}
+.chip{
+  font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:.68rem;
+  font-weight:500;
+  letter-spacing:.09em;
+  text-transform:uppercase;
+  padding:.3rem .6rem;
+  border:1px solid var(--rule-strong);
+  border-radius:2px;
+  color:var(--text-2);
+  background:var(--surface);
+}
+.chip.draft{border-color:var(--warn);color:var(--warn);}
+
+/* ---------- toc ---------- */
+.toc{
+  position:sticky;
+  top:1.5rem;
+  font-family:Archivo,Arial,sans-serif;
+  font-size:.84rem;
+  line-height:1.45;
+  max-height:calc(100vh - 3rem);
+  overflow-y:auto;
+}
+@media (max-width:960px){
+  .toc{
+    position:static;
+    max-height:none;
+    border:1px solid var(--rule);
+    background:var(--surface);
+    padding:1.1rem 1.25rem;
+    margin-bottom:2.5rem;
+  }
+}
+.toc h2{
+  font-size:.68rem;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  color:var(--text-3);
+  font-weight:600;
+  margin:0 0 .8rem;
+  font-family:"IBM Plex Mono",monospace;
+}
+.toc ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.28rem;}
+.toc a{
+  color:var(--text-2);
+  text-decoration:none;
+  display:grid;
+  grid-template-columns:1.6rem 1fr;
+  gap:.4rem;
+  padding:.15rem .3rem .15rem 0;
+  border-radius:2px;
+}
+.toc a .n{
+  font-family:"IBM Plex Mono",monospace;
+  font-size:.72rem;
+  color:var(--text-3);
+  font-variant-numeric:tabular-nums;
+}
+.toc a:hover{color:var(--accent);}
+.toc a:hover .n{color:var(--accent);}
+
+/* ---------- content ---------- */
+main{min-width:0;}
+section{margin:0 0 3.25rem;scroll-margin-top:1.5rem;}
+.prose{max-width:var(--measure);}
+p{margin:0 0 1.05rem;max-width:var(--measure);}
+main > section > h2{
+  font-family:Archivo,Arial,sans-serif;
+  font-size:clamp(1.5rem,3vw,2rem);
+  font-weight:700;
+  letter-spacing:-.02em;
+  line-height:1.12;
+  margin:0 0 .35rem;
+  text-wrap:balance;
+}
+h3{
+  font-family:Archivo,Arial,sans-serif;
+  font-size:1.03rem;
+  font-weight:600;
+  letter-spacing:-.005em;
+  margin:2.1rem 0 .5rem;
+  display:flex;
+  gap:.7rem;
+  align-items:baseline;
+  text-wrap:balance;
+}
+h3 .cn{
+  font-family:"IBM Plex Mono",monospace;
+  font-size:.78rem;
+  font-weight:500;
+  color:var(--accent);
+  font-variant-numeric:tabular-nums;
+  flex:none;
+}
+h4{
+  font-family:Archivo,Arial,sans-serif;
+  font-size:.78rem;
+  font-weight:600;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+  color:var(--text-3);
+  margin:1.8rem 0 .6rem;
+}
+
+/* tier heading block */
+.tier{
+  border-left:4px solid var(--tier-color,var(--rule-strong));
+  padding-left:clamp(.9rem,2vw,1.4rem);
+}
+.tier-label{
+  font-family:"IBM Plex Mono",monospace;
+  font-size:.68rem;
+  font-weight:600;
+  letter-spacing:.15em;
+  text-transform:uppercase;
+  color:var(--tier-color,var(--text-3));
+  margin:0 0 .45rem;
+}
+.tier-radius{
+  font-family:"IBM Plex Mono",monospace;
+  font-size:.78rem;
+  color:var(--text-3);
+  margin:0 0 1.4rem;
+  max-width:var(--measure);
+}
+#tier-a{--tier-color:var(--tier-a);}
+#tier-b{--tier-color:var(--tier-b);}
+#tier-c{--tier-color:var(--tier-c);}
+#tier-d{--tier-color:var(--tier-d);}
+#profiles{--tier-color:var(--accent-2);}
+#tier-e{--tier-color:var(--tier-e);}
+#tier-f{--tier-color:var(--tier-f);}
+#tier-g{--tier-color:var(--tier-g);}
+
+a{color:var(--accent);text-underline-offset:.16em;}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+
+code,kbd{
+  font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:.855em;
+  background:var(--code-bg);
+  padding:.1em .34em;
+  border-radius:2px;
+}
+pre{
+  font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:.8rem;
+  line-height:1.55;
+  background:var(--surface);
+  border:1px solid var(--rule);
+  padding:1.1rem 1.2rem;
+  overflow-x:auto;
+  margin:1.2rem 0;
+  color:var(--text-2);
+}
+pre code{background:none;padding:0;font-size:1em;}
+
+/* normative keywords */
+.kw{
+  font-family:"IBM Plex Mono",monospace;
+  font-size:.82em;
+  font-weight:600;
+  letter-spacing:.06em;
+  color:var(--accent-2);
+  background:none;
+  padding:0;
+}
+
+/* the WHY motif - the page's structural device */
+.why{
+  border-left:2px solid var(--accent);
+  background:var(--accent-soft);
+  padding:.85rem 1.1rem .9rem;
+  margin:1rem 0 1.4rem;
+  max-width:var(--measure);
+  font-size:.97rem;
+  color:var(--text-2);
+}
+.why > .lbl{
+  display:block;
+  font-family:"IBM Plex Mono",monospace;
+  font-size:.63rem;
+  font-weight:600;
+  letter-spacing:.18em;
+  text-transform:uppercase;
+  color:var(--accent);
+  margin-bottom:.35rem;
+}
+.why p{margin:0 0 .6rem;}
+.why p:last-child{margin:0;}
+
+table{
+  border-collapse:collapse;
+  width:100%;
+  font-size:.87rem;
+  font-variant-numeric:tabular-nums;
+  margin:.4rem 0 1.4rem;
+}
+.scroll{overflow-x:auto;margin:1.2rem 0;border-bottom:1px solid var(--rule);}
+.scroll table{margin:0;min-width:34rem;}
+th,td{
+  text-align:left;
+  padding:.5rem .8rem .5rem 0;
+  border-bottom:1px solid var(--rule);
+  vertical-align:top;
+}
+th{
+  font-family:Archivo,Arial,sans-serif;
+  font-size:.68rem;
+  font-weight:600;
+  letter-spacing:.11em;
+  text-transform:uppercase;
+  color:var(--text-3);
+  border-bottom:1px solid var(--rule-strong);
+  white-space:nowrap;
+}
+td code{font-size:.9em;}
+.mono td:first-child,.mono td:nth-child(2){
+  font-family:"IBM Plex Mono",monospace;
+  font-size:.9em;
+  white-space:nowrap;
+}
+tbody tr:last-child td{border-bottom:none;}
+
+ul,ol.list{max-width:var(--measure);padding-left:1.15rem;margin:0 0 1.1rem;}
+li{margin-bottom:.4rem;}
+
+/* palette strip */
+.palette{
+  display:grid;
+  grid-template-columns:repeat(16,1fr);
+  border:1px solid var(--rule-strong);
+  margin:1.2rem 0 .5rem;
+  overflow:hidden;
+}
+.palette div{aspect-ratio:1;}
+.palette-key{
+  font-family:"IBM Plex Mono",monospace;
+  font-size:.68rem;
+  color:var(--text-3);
+  display:flex;
+  justify-content:space-between;
+  margin-bottom:1.4rem;
+}
+
+/* tier index table gets colored swatch cells */
+.swatch{
+  display:inline-block;
+  width:.6rem;height:.6rem;
+  border-radius:1px;
+  margin-right:.45rem;
+  vertical-align:baseline;
+}
+
+.lede{
+  font-size:1.08rem;
+  color:var(--text-2);
+  max-width:var(--measure);
+}
+
+hr{border:none;border-top:1px solid var(--rule);margin:2.5rem 0;}
+
+footer{
+  grid-column:1 / -1;
+  border-top:2px solid var(--text);
+  margin-top:2rem;
+  padding:1.5rem 0 4rem;
+  font-family:"IBM Plex Mono",monospace;
+  font-size:.72rem;
+  color:var(--text-3);
+  display:flex;
+  flex-wrap:wrap;
+  gap:.5rem 1.5rem;
+  justify-content:space-between;
+}
+
+@media (prefers-reduced-motion:reduce){
+  *{animation:none !important;transition:none !important;}
+}
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow"><span>Console Specification</span><span>Draft 1</span><span>Working name</span></p>
+    <h1>Square One<span class="sub">A 128x128 virtual console, and the cart format that feeds it</span></h1>
+    <p class="deck">One runtime, many carts. Games ship as a single <code>.cart</code> file that is deterministic, content-addressed, signed, and structurally incapable of reaching the network. Every number in this document carries the reason it is that number.</p>
+    <div class="status">
+      <span class="chip draft">Status: draft</span>
+      <span class="chip">Spec 1.0.0-draft</span>
+      <span class="chip">Nothing implemented yet</span>
+      <span class="chip">Name is a placeholder</span>
+    </div>
+  </header>
+
+  <aside class="toc">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#read"><span class="n">0</span><span>How to read this</span></a></li>
+      <li><a href="#overview"><span class="n">1</span><span>Overview</span></a></li>
+      <li><a href="#tier-a"><span class="n">2</span><span>Frozen core</span></a></li>
+      <li><a href="#tier-b"><span class="n">3</span><span>Universal Profile</span></a></li>
+      <li><a href="#tier-c"><span class="n">4</span><span>The ABI</span></a></li>
+      <li><a href="#tier-d"><span class="n">5</span><span>Cart container</span></a></li>
+      <li><a href="#profiles"><span class="n">6</span><span>Profiles &amp; downlevel</span></a></li>
+      <li><a href="#tier-e"><span class="n">7</span><span>Engines</span></a></li>
+      <li><a href="#tier-f"><span class="n">8</span><span>Modules &amp; recipes</span></a></li>
+      <li><a href="#tier-g"><span class="n">9</span><span>The stamper</span></a></li>
+      <li><a href="#security"><span class="n">10</span><span>Security model</span></a></li>
+      <li><a href="#conformance"><span class="n">11</span><span>Conformance</span></a></li>
+      <li><a href="#open"><span class="n">12</span><span>Open questions</span></a></li>
+      <li><a href="#order"><span class="n">13</span><span>Build order</span></a></li>
+    </ol>
+  </aside>
+
+  <main>
+
+    <!-- ============ 0 ============ -->
+    <section id="read">
+      <h2>0. How to read this</h2>
+      <p class="lede">This specification is ordered by <strong>blast radius</strong>: what breaks if the decision changes later. That ordering is also the order in which the decisions must be made, because only the first tier is irreversible.</p>
+
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Tier</th><th>Contains</th><th>Blast radius</th><th>Change policy</th></tr></thead>
+          <tbody>
+            <tr><td><span class="swatch" style="background:var(--tier-a)"></span><strong>A</strong> Frozen core</td><td>Timestep, RNG, number format, input model, machine state</td><td>Every cart ever made, and every replay desyncs</td><td>Never</td></tr>
+            <tr><td><span class="swatch" style="background:var(--tier-b)"></span><strong>B</strong> Machine profile</td><td>Display, palette, audio, memory and cart budgets</td><td>Every cart</td><td>New spec major; old core ships forever</td></tr>
+            <tr><td><span class="swatch" style="background:var(--tier-c)"></span><strong>C</strong> ABI</td><td>The call surface a cart is given</td><td>Carts using the new calls</td><td>Additive only within a major</td></tr>
+            <tr><td><span class="swatch" style="background:var(--tier-d)"></span><strong>D</strong> Container</td><td>Chunk format, encoding, identity, signing</td><td>Tooling</td><td>Forward-compatible via skippable chunks</td></tr>
+            <tr><td><span class="swatch" style="background:var(--tier-e)"></span><strong>E</strong> Engines</td><td>Platformer, top-down, shmup kernels; stdlib</td><td>Carts that opt in</td><td>Free &mdash; carts pin a version</td></tr>
+            <tr><td><span class="swatch" style="background:var(--tier-f)"></span><strong>F</strong> Templates</td><td>Sprite sets, palettes, tilesets, instrument banks, tuning</td><td>Nothing</td><td>Free, unbounded</td></tr>
+            <tr><td><span class="swatch" style="background:var(--tier-g)"></span><strong>G</strong> Tools</td><td>Editors, CLI, stamper, registry, player</td><td>Nothing</td><td>Free</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="why">
+        <span class="lbl">Why order by blast radius</span>
+        <p>Most console specifications rot because they interleave decisions that can never change with decisions that change weekly. Sorting by consequence produces the chapter order, the decision order, and the change policy from a single principle &mdash; and it makes Tier A small enough to argue about properly.</p>
+      </div>
+
+      <h3><span class="cn">0.1</span> Normative language</h3>
+      <p><span class="kw">MUST</span>, <span class="kw">MUST NOT</span>, <span class="kw">SHOULD</span> and <span class="kw">MAY</span> are used as in RFC 2119. A requirement marked <span class="kw">MUST</span> is part of conformance (section 11); anything else is guidance.</p>
+    </section>
+
+    <!-- ============ 1 ============ -->
+    <section id="overview">
+      <h2>1. Overview</h2>
+      <p>Square One is a virtual console that runs in a browser. A game is a single file &mdash; a <strong>cart</strong> &mdash; that contains its code, art, audio, map data and, optionally, the recipe that built it.</p>
+
+      <p>The screen is square, 128 by 128 pixels. On a phone held in portrait, the square occupies the top and the console itself &mdash; bezel, cart title, player lights, pause, and a virtual d-pad and buttons &mdash; occupies the rest. The screen shape is what makes the device shape possible.</p>
+
+<pre><code>  PORTRAIT PHONE               LANDSCAPE / DESKTOP
+  +---------------+            +-----------------------------+
+  |     SHELL     |            |  SHELL     +-------------+  |
+  |  +---------+  |            |  bezel     |             |  |
+  |  | 128x128 |  |            |  title     |   128x128   |  |
+  |  |  CART   |  |            |  P1 P2     |    CART     |  |
+  |  +---------+  |            |  pause     |             |  |
+  |               |            |            +-------------+  |
+  |   (+)   A  B  |            +-----------------------------+
+  |  dpad   X  Y  |
+  +---------------+</code></pre>
+
+      <p>Four properties define the system, and everything else in this document follows from them.</p>
+
+      <ul>
+        <li><strong>A cart is a pure function.</strong> Given a state and an input frame it produces the next state. It has no clock, no network, no host storage and no ambient authority of any kind.</li>
+        <li><strong>Therefore replays are proofs.</strong> A recorded input log re-simulates to the identical result on any conformant implementation, forever. Rewind, save states, rollback netplay, regression tests and verifiable high scores are all the same feature.</li>
+        <li><strong>A cart's identity is its content hash.</strong> A modified cart is a different cart with a different link. Authors sign; the signature is checkable by anyone.</li>
+        <li><strong>Carts are built from a recipe, reproducibly.</strong> Rebuilding a recipe with the same module versions produces a byte-identical cart, so "this cart is what its recipe says" is a claim anyone can verify without trusting the publisher.</li>
+      </ul>
+    </section>
+
+    <!-- ============ 2 ============ -->
+    <section id="tier-a" class="tier">
+      <p class="tier-label">Tier A</p>
+      <h2>2. The frozen core</h2>
+      <p class="tier-radius">Blast radius: every cart ever made, and every replay in the archive. Nothing in this section may change after spec 1 ships.</p>
+
+      <h3><span class="cn">2.1</span> The cart contract</h3>
+      <p>A cart <span class="kw">MUST</span> expose exactly two entry points:</p>
+<pre><code>boot(seed)   called once, after the cart image is loaded into RAM
+tick()       called exactly once per simulated frame</code></pre>
+      <p>A cart <span class="kw">MUST NOT</span> be given, and a conformant runtime <span class="kw">MUST NOT</span> expose: wall-clock time, network access, host filesystem or storage outside its own save region, the DOM, the ability to spawn execution contexts, or any source of entropy other than the console PRNG.</p>
+
+      <div class="why">
+        <span class="lbl">Why the contract is frozen but the language is not</span>
+        <p>Tier A fixes <em>what a cart is</em> &mdash; a deterministic state transition with no ambient authority. It deliberately does not fix <em>what a cart is written in</em>. That separation is what lets section 5.2 reserve a second payload type today and implement it in five years without invalidating a single existing cart.</p>
+      </div>
+
+      <h3><span class="cn">2.2</span> Time</h3>
+      <p>The simulation runs at exactly <strong>60 Hz</strong> with a fixed timestep. <code>tick()</code> receives no delta. The only clock available to a cart is a <strong>u32 frame counter</strong>, readable at <code>0x20FC</code>, which increments by one per tick and never by any other amount.</p>
+      <p>A runtime <span class="kw">MUST</span> decouple presentation from simulation using an accumulator, and <span class="kw">MUST</span> clamp catch-up to at most <strong>5 simulation steps</strong> per presented frame.</p>
+
+      <div class="why">
+        <span class="lbl">Why 60 Hz fixed, and why an integer clock</span>
+        <p>Variable delta time is nondeterminism, and nondeterminism costs replays, rollback netplay, verifiable scores, regression tests and reproducible bug reports &mdash; all five, permanently. 60 rather than 30 because 30 Hz input sampling is felt immediately in any action game, and 16.67 ms is an enormous budget when the framebuffer is 8 KB.</p>
+        <p>The clock is an integer because an integer frame index is exact, serializable, and identical in 2026 and 2050. A cart that cannot see the wall clock cannot break on a leap day, cannot behave differently in another timezone, and cannot desync a replay.</p>
+        <p>The 5-step clamp exists because a backgrounded tab returning after 30 seconds would otherwise try to simulate 1,800 frames at once and enter a spiral it never leaves.</p>
+      </div>
+
+      <h3><span class="cn">2.3</span> Numbers</h3>
+      <p>The canonical numeric type is <strong>signed 16.16 fixed point</strong> held in an i32. <code>1.0</code> is <code>65536</code>. Range is approximately -32768.0 to +32767.99998, with a resolution of 1/65536 of a pixel.</p>
+<pre><code>mul(a,b)  =  (i64(a) * i64(b)) &gt;&gt; 16      truncating toward zero
+div(a,b)  =  (i64(a) &lt;&lt; 16) / i64(b)      truncating toward zero
+Intermediates MUST be 64-bit. Overflow saturates; it MUST NOT wrap.</code></pre>
+
+      <div class="why">
+        <span class="lbl">Why fixed point rather than floats</span>
+        <p>IEEE floats are mostly deterministic, and "mostly" is worthless when a script interpreter is a valid runtime path. Fixed point is exactly reproducible on every implementation, faster on weak hardware, and makes "one pixel" the natural unit while keeping sub-pixel motion. The intermediate width and rounding mode are specified here because leaving either implicit is precisely how two conformant-looking implementations diverge on frame 4,000.</p>
+      </div>
+
+      <h3><span class="cn">2.4</span> Randomness</h3>
+      <p>The console owns exactly one PRNG: <strong>PCG32</strong>, with 64-bit state and 64-bit stream increment, multiplier <code>6364136223846793005</code>, output function XSH-RR. Its 16-byte state lives at <code>0x2100</code> and is part of the machine snapshot.</p>
+<pre><code>rand32()   -&gt; u32
+rnd(n)     -&gt; (u64(rand32()) * u64(n)) &gt;&gt; 32     unbiased, no division
+rndf()     -&gt; rand32() &gt;&gt; 16                     16.16 fixed in [0.0, 1.0)</code></pre>
+      <p>There is no other entropy source in the machine. <code>boot(seed)</code> receives the session seed; the runtime <span class="kw">MUST</span> record that seed alongside any replay.</p>
+
+      <div class="why">
+        <span class="lbl">Why the algorithm is named, not described</span>
+        <p>"Use a good PRNG" is not a specification. Two implementations will choose differently, and every replay in the archive desyncs. The bounded form uses multiply-shift rather than modulo because modulo introduces bias that differs with <code>n</code>, and because it needs no division.</p>
+      </div>
+
+      <h3><span class="cn">2.5</span> Input</h3>
+      <p>The machine has <strong>four player slots</strong>, of which the Universal Profile populates <strong>two</strong>. Each slot is <strong>one byte</strong>, one bit per button:</p>
+<pre><code>bit 0  UP        bit 4  A     guaranteed reachable on touch
+bit 1  DOWN      bit 5  B     guaranteed reachable on touch
+bit 2  LEFT      bit 6  X     may be awkward on touch
+bit 3  RIGHT     bit 7  Y     may be awkward on touch</code></pre>
+      <p>Input is sampled <strong>once per tick</strong>, before <code>tick()</code> runs. Absent slots read as <code>0x00</code> and are reported absent in <code>PLAYERS_PRESENT</code>. Pause, menu and reset are <strong>console functions</strong>: they are not among the eight bits and a cart <span class="kw">MUST NOT</span> be able to observe or suppress them.</p>
+
+      <div class="why">
+        <span class="lbl">Why exactly eight buttons</span>
+        <p>Eight buttons is one bit each, which is <strong>one byte per player</strong>. A frame of input is four bytes; ten minutes of two-player input is 144 KB raw and roughly 2 to 5 KB after run-length encoding, because held buttons compress to nothing. That is what makes a replay small enough to attach to a bug report. Break the byte and the property is gone.</p>
+        <p>Eight is also the largest set that maps to every input device without invention: keyboard, any gamepad ever made, and &mdash; the binding constraint &mdash; touch, where a thumb-reachable d-pad plus two primary buttons is the honest maximum. The ninth button is always the one that breaks phones. The Game Boy shipped eight. The NES shipped eight. That is the thumb budget of two hands, not nostalgia.</p>
+      </div>
+
+      <div class="why">
+        <span class="lbl">Why four slots when only two are used</span>
+        <p>Four bytes instead of two costs nothing today and prevents a Tier A break the day someone wants four-player. Reserving address space early is free; reserving it late is impossible.</p>
+      </div>
+
+      <div class="why">
+        <span class="lbl">Why pause belongs to the console</span>
+        <p>One clause, and an entire class of hostile-cart behavior becomes impossible: no cart can trap a player in a game or forge the system menu. It also means the shell, not the cart, draws the touch controls &mdash; so every cart gets working touch input for free and no author ever thinks about it.</p>
+      </div>
+
+      <h3><span class="cn">2.6</span> Machine state</h3>
+      <p>The complete state of a running machine is <strong>65,536 bytes of RAM</strong> plus the 16 bytes of PRNG state held inside it. There is no state anywhere else &mdash; no hidden registers, no host-side objects, no interpreter heap that outlives a snapshot.</p>
+
+      <div class="why">
+        <span class="lbl">Why one buffer, and why 64 KB</span>
+        <p>If the whole machine is one contiguous buffer, then snapshot, rewind and rollback are <code>memcpy</code>. Thirty seconds of rewind is 64 KB x 60 x 30 = 115 MB raw, which XOR-delta plus RLE reduces to roughly 3 to 6 MB. Affordable on a phone.</p>
+        <p>64 KB because every address is then a <code>u16</code> and the entire memory map fits on one printed page. That legibility is the product: it is what lets a stranger implement this console in a weekend, which is what makes the format outlive its authors.</p>
+      </div>
+    </section>
+
+    <!-- ============ 3 ============ -->
+    <section id="tier-b" class="tier">
+      <p class="tier-label">Tier B</p>
+      <h2>3. The Universal Profile</h2>
+      <p class="tier-radius">Blast radius: every cart. Changing any of it means a new spec major, and the old core ships forever alongside the new one.</p>
+
+      <p class="lede">The Universal Profile (<code>UP</code>) is the normative machine. Every conformant player implements it in full, and every published cart contains a rendition that runs on it.</p>
+
+      <h3><span class="cn">3.1</span> Display</h3>
+      <table>
+        <tbody>
+          <tr><td>Resolution</td><td><code>128 x 128</code>, square</td></tr>
+          <tr><td>Depth</td><td>4 bits per pixel, 2 pixels per byte, low nibble is the left pixel</td></tr>
+          <tr><td>Framebuffer</td><td><code>8,192 bytes</code> at <code>0x0000</code>, row-major</td></tr>
+          <tr><td>Live palette</td><td>16 slots, each selecting one of 64 hardware colors</td></tr>
+          <tr><td>Refresh</td><td>60 Hz, one <code>tick()</code> per presented frame</td></tr>
+        </tbody>
+      </table>
+
+      <div class="why">
+        <span class="lbl">Why 16 colors</span>
+        <p>Four bits is half a byte, so two pixels pack into one. 128 x 128 at 4 bpp is exactly 8,192 bytes. Both numbers are powers of two <em>because the packing works out</em> &mdash; that is the engineering reason. 32 colors is a genuinely bad number: 5 bpp packs into nothing.</p>
+        <p>The design reason is stronger. A fixed 16-color palette forces every author to reuse the same colors, which is what makes a library of a thousand carts by a thousand strangers look like one console. No art direction can buy that.</p>
+      </div>
+
+      <div class="why">
+        <span class="lbl">Why square, and why 128</span>
+        <p>128 integer-scales to 512, 768 and 1024 with perfect pixels on any display. A 16 x 16 tile grid gives 8 x 8 tiles on screen, which is a readable density for pixel art. And square survives phone rotation, which 16:9 does not &mdash; more importantly, on a portrait phone the leftover rectangle is not waste, it is where the console goes.</p>
+      </div>
+
+      <h3><span class="cn">3.2</span> Palette and remap</h3>
+      <p>Three tables sit between a cart's color index and a screen pixel:</p>
+<pre><code>cart writes index i (0-15)
+   -&gt; DRAW_REMAP[i]     0x20D0, 16 bytes, identity at boot
+   -&gt; PALETTE_LIVE[..]  0x20C0, 16 bytes, each 0-63
+   -&gt; PALETTE_HW[..]    0x2000, 64 x RGB888
+   -&gt; screen</code></pre>
+      <p>The reference hardware palette, which a cart <span class="kw">MAY</span> overwrite in full:</p>
+      <div class="palette">
+        <div style="background:#0d0b12"></div><div style="background:#1c1a2b"></div>
+        <div style="background:#3a3550"></div><div style="background:#6b6486"></div>
+        <div style="background:#a8a2bd"></div><div style="background:#e8e6f0"></div>
+        <div style="background:#ffffff"></div><div style="background:#7f2b4a"></div>
+        <div style="background:#d94f5c"></div><div style="background:#f2934a"></div>
+        <div style="background:#f7d46b"></div><div style="background:#3f7d4e"></div>
+        <div style="background:#6ec27a"></div><div style="background:#2c5f8a"></div>
+        <div style="background:#4a9dd4"></div><div style="background:#9b6fd4"></div>
+      </div>
+      <p class="palette-key"><span>00 void</span><span>0F orchid</span></p>
+
+      <div class="why">
+        <span class="lbl">Why a remap table rather than more bits</span>
+        <p>The remap layer is what stops 16 colors being a prison. Fades, damage flashes, day and night, and per-area color schemes all become a 16-byte write &mdash; no extra bits in the framebuffer, no extra fill cost, no change to any sprite. It is the cheapest expressive range in the whole machine.</p>
+      </div>
+
+      <h3><span class="cn">3.3</span> Memory map</h3>
+      <p>The 64 KB is <strong>RAM</strong>. A cart's static data initializes <code>0x2000</code> through <code>0x77FF</code> at boot; code is the cart payload and is budgeted separately (3.5).</p>
+      <div class="scroll">
+        <table class="mono">
+          <thead><tr><th>Range</th><th>Bytes</th><th>Region</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>0000&ndash;1FFF</td><td>8,192</td><td>FRAMEBUFFER</td><td>128 x 128 at 4 bpp</td></tr>
+            <tr><td>2000&ndash;20BF</td><td>192</td><td>PALETTE_HW</td><td>64 x RGB888</td></tr>
+            <tr><td>20C0&ndash;20CF</td><td>16</td><td>PALETTE_LIVE</td><td>16 x u8, index into PALETTE_HW</td></tr>
+            <tr><td>20D0&ndash;20DF</td><td>16</td><td>DRAW_REMAP</td><td>identity at boot</td></tr>
+            <tr><td>20E0&ndash;20E3</td><td>4</td><td>CLIP</td><td>x0, y0, x1, y1</td></tr>
+            <tr><td>20E4&ndash;20E7</td><td>4</td><td>CAMERA</td><td>i16 x, i16 y</td></tr>
+            <tr><td>20E8&ndash;20EF</td><td>8</td><td>&mdash;</td><td>reserved</td></tr>
+            <tr><td>20F0&ndash;20F3</td><td>4</td><td>INPUT_NOW</td><td>4 slots, 1 byte each</td></tr>
+            <tr><td>20F4&ndash;20F7</td><td>4</td><td>INPUT_PREV</td><td>previous tick, for edge detection</td></tr>
+            <tr><td>20F8</td><td>1</td><td>PLAYERS_PRESENT</td><td>bitmask</td></tr>
+            <tr><td>20F9&ndash;20FB</td><td>3</td><td>&mdash;</td><td>reserved</td></tr>
+            <tr><td>20FC&ndash;20FF</td><td>4</td><td>FRAME</td><td>u32, read-only</td></tr>
+            <tr><td>2100&ndash;210F</td><td>16</td><td>RNG_STATE</td><td>PCG32 state and increment</td></tr>
+            <tr><td>2110&ndash;214F</td><td>64</td><td>AUDIO_CH</td><td>4 channels x 16 bytes</td></tr>
+            <tr><td>2150&ndash;215F</td><td>16</td><td>AUDIO_MASTER</td><td>volume, music cursor</td></tr>
+            <tr><td>2160&ndash;21FF</td><td>160</td><td>&mdash;</td><td>reserved for hardware</td></tr>
+            <tr><td>2200&ndash;41FF</td><td>8,192</td><td>SPRITES</td><td>256 sprites, 8 x 8, 4 bpp</td></tr>
+            <tr><td>4200&ndash;42FF</td><td>256</td><td>SPRITE_FLAGS</td><td>8 flags per sprite</td></tr>
+            <tr><td>4300&ndash;62FF</td><td>8,192</td><td>MAP</td><td>128 x 64 tiles, 1 byte each</td></tr>
+            <tr><td>6300&ndash;6FFF</td><td>3,328</td><td>SFX</td><td>sound effect bank</td></tr>
+            <tr><td>7000&ndash;77FF</td><td>2,048</td><td>MUSIC</td><td>pattern data</td></tr>
+            <tr><td>7800&ndash;FEFF</td><td>34,560</td><td>USER_RAM</td><td>zeroed at boot</td></tr>
+            <tr><td>FF00&ndash;FFFF</td><td>256</td><td>SAVE</td><td>persisted, keyed by cart id</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="why">
+        <span class="lbl">Why the save region is 256 bytes and lives in the map</span>
+        <p>Putting persistence inside the address space means saving is <code>poke</code>, not an API with error states. 256 bytes is enough for progress, unlocks and a high score table, and small enough that a thousand carts on a phone cost a quarter of a megabyte. It is keyed by cart id, so one cart can never read another's save.</p>
+      </div>
+
+      <h3><span class="cn">3.4</span> Audio</h3>
+      <p>Four channels. Each selects one of five waveforms &mdash; pulse (with duty), triangle, sawtooth, noise, and a 32-step user wavetable &mdash; with per-channel volume, pitch and envelope. Music is pattern data driving the same four channels.</p>
+
+      <div class="why">
+        <span class="lbl">Why four channels</span>
+        <p>Melody, harmony, bass and percussion is the minimum <em>complete</em> arrangement; three forces you to drop one of them. The binding constraint is one nobody anticipates: <strong>the tracker has to fit on the console's own 128-pixel screen.</strong> Four columns fit. Eight do not. Letting the editor constrain the hardware is a healthy forcing function, not a compromise.</p>
+      </div>
+
+      <h3><span class="cn">3.5</span> Budgets</h3>
+      <table>
+        <tbody>
+          <tr><td>Cart file</td><td><code>65,536 bytes</code> for the Universal Profile rendition</td></tr>
+          <tr><td>Code</td><td><code>8,192 tokens</code> as counted by the normative tokenizer</td></tr>
+          <tr><td>Sprites</td><td>256</td></tr>
+          <tr><td>Map</td><td>128 x 64 tiles</td></tr>
+          <tr><td>Save</td><td>256 bytes per cart id</td></tr>
+        </tbody>
+      </table>
+
+      <div class="why">
+        <span class="lbl">Why tokens and not bytes</span>
+        <p>A byte limit taxes comments, whitespace and descriptive names &mdash; it punishes readable code, which is exactly backwards when every cart ships its source and therefore every cart is also a tutorial. A token limit measures complexity, which is the thing worth bounding. Keep the counter permanently on screen and it becomes a game people enjoy losing.</p>
+      </div>
+
+      <p>The counter is normative and is defined by its reference implementation plus a fixture set, not by prose: tokenize per the ECMAScript lexical grammar, <strong>every token counts as one</strong>, whitespace and comments count as zero. No exceptions, no discounted keywords.</p>
+
+      <div class="why">
+        <span class="lbl">Why the counter is allowed to be imperfect</span>
+        <p>Deciding whether <code>/</code> begins a regular expression or is a division operator cannot be done correctly without a parser. The counter uses a one-token-lookback rule, which is wrong in three enumerated cases, each pinned by a fixture recording both this count and the count a real parser would give.</p>
+        <p>That is deliberate. The failure mode is a slightly wrong <em>count</em>, never a wrong program &mdash; the engine still parses the cart correctly. And a rule that never looks past one previous token is one a second implementation can reproduce exactly on the first attempt, which is the entire reason to have a normative counter at all. A perfect rule that nobody re-implements correctly would be worth less.</p>
+      </div>
+
+      <h3><span class="cn">3.6</span> The shell</h3>
+      <p>The shell is everything outside the 128 x 128 window: bezel, cart title, player indicators, pause, and the virtual controller on touch devices. It is drawn by the console. A cart <span class="kw">MUST NOT</span> be able to write a single pixel outside its framebuffer, render text into the shell, or influence its appearance.</p>
+      <p>Shells are skinnable and ship as Tier F modules, the same as sprite sets.</p>
+
+      <div class="why">
+        <span class="lbl">Why the shell is a security boundary, not decoration</span>
+        <p>Because the shell is always console-drawn and always present, a cart can draw a convincing fake login box inside its window and it will still be visibly inside a game screen, inside a console, with no address bar and nowhere to submit. Chrome that the untrusted content cannot reach or imitate is the same mechanism a browser uses for its own URL bar.</p>
+      </div>
+    </section>
+
+    <!-- ============ 4 ============ -->
+    <section id="tier-c" class="tier">
+      <p class="tier-label">Tier C</p>
+      <h2>4. The ABI</h2>
+      <p class="tier-radius">Blast radius: carts that use a new call. Additive only within a spec major &mdash; no call is ever removed or has its signature changed.</p>
+
+      <p>A cart declares a minimum ABI minor in <code>META</code>. A player refuses a cart requiring a minor it does not implement, and says which one.</p>
+
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Call</th><th>Effect</th></tr></thead>
+          <tbody>
+            <tr><td><code>gfx.cls(c)</code></td><td>Clear framebuffer to color</td></tr>
+            <tr><td><code>gfx.pset(x,y,c)</code> / <code>gfx.pget(x,y)</code></td><td>Single pixel write / read</td></tr>
+            <tr><td><code>gfx.line(x0,y0,x1,y1,c)</code></td><td>Bresenham line, endpoints inclusive</td></tr>
+            <tr><td><code>gfx.rect(x,y,w,h,c,fill)</code></td><td>Rectangle, outline or filled</td></tr>
+            <tr><td><code>gfx.circ(x,y,r,c,fill)</code></td><td>Midpoint circle</td></tr>
+            <tr><td><code>gfx.spr(n,x,y,w,h,fx,fy)</code></td><td>Blit sprite <code>n</code>, w x h cells, optional flips</td></tr>
+            <tr><td><code>gfx.sspr(sx,sy,sw,sh,dx,dy,dw,dh)</code></td><td>Stretched blit from the sprite sheet</td></tr>
+            <tr><td><code>gfx.map(cx,cy,sx,sy,cw,ch,layer)</code></td><td>Draw a region of the tile map</td></tr>
+            <tr><td><code>gfx.print(s,x,y,c)</code></td><td>System font, 4 x 6 cell</td></tr>
+            <tr><td><code>gfx.pal(from,to)</code> / <code>gfx.palt(c,on)</code></td><td>Set draw remap entry / transparency</td></tr>
+            <tr><td><code>gfx.clip(x,y,w,h)</code> / <code>gfx.camera(x,y)</code></td><td>Clip rectangle / draw offset</td></tr>
+            <tr><td><code>snd.sfx(n,ch)</code></td><td>Play effect <code>n</code> on channel</td></tr>
+            <tr><td><code>snd.music(n,fade,mask)</code></td><td>Start pattern, fade in ms, channel mask</td></tr>
+            <tr><td><code>inp.btn(b,p)</code></td><td>Button held this tick</td></tr>
+            <tr><td><code>inp.btnp(b,p)</code></td><td>Button newly pressed this tick</td></tr>
+            <tr><td><code>sys.rnd(n)</code> / <code>sys.rndf()</code></td><td>Bounded integer / fixed-point [0,1)</td></tr>
+            <tr><td><code>sys.sin(a)</code> / <code>sys.cos(a)</code></td><td>Fixed-point, table-driven, 1024 steps per turn</td></tr>
+            <tr><td><code>sys.frame()</code></td><td>Current frame index</td></tr>
+            <tr><td><code>sys.peek(a)</code> / <code>sys.poke(a,v)</code></td><td>Direct RAM access</td></tr>
+            <tr><td><code>sys.memcpy</code> / <code>sys.memset</code></td><td>Block operations</td></tr>
+            <tr><td><code>sys.save()</code> / <code>sys.load()</code></td><td>Flush / restore the 256-byte save region</td></tr>
+            <tr><td><code>sys.trace(...)</code></td><td>Developer console. No-op in a release player</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="why">
+        <span class="lbl">Why the console supplies its own sine and cosine</span>
+        <p><code>Math.sin</code>, <code>cos</code>, <code>exp</code> and <code>pow</code> are <strong>not specified to bit precision in ECMAScript</strong>. V8 and SpiderMonkey genuinely differ in the last unit in the last place. That difference is invisible in an ordinary application and it will desync a replay between Chrome and Firefox. So the console ships a fixed-point table, and the host's math library is removed entirely (5.2).</p>
+      </div>
+    </section>
+
+    <!-- ============ 5 ============ -->
+    <section id="tier-d" class="tier">
+      <p class="tier-label">Tier D</p>
+      <h2>5. The cart container</h2>
+      <p class="tier-radius">Blast radius: tooling. Forward-compatible by design, so new chunk types never break old players.</p>
+
+      <h3><span class="cn">5.1</span> Three forms of one thing</h3>
+      <table>
+        <tbody>
+          <tr><td><code>.cart</code></td><td>The binary container. What a player loads.</td></tr>
+          <tr><td><code>.cart.png</code></td><td>The same bytes carried in the low two bits of a 128 x 128 label image. The cart is a screenshot you can post anywhere, and drag back in to play.</td></tr>
+          <tr><td><code>recipe.toml</code></td><td>The source. Small, readable, diffable in git. Section 8.</td></tr>
+        </tbody>
+      </table>
+
+      <h3><span class="cn">5.2</span> Header and payload type</h3>
+<pre><code>offset  size  field
+ 0      4     magic         "SQ1C"
+ 4      2     spec_major    u16 LE
+ 6      2     spec_minor    u16 LE
+ 8      4     chunk_count   u32 LE
+12      4     index_offset  u32 LE  -&gt; chunk directory</code></pre>
+      <p>The payload type is declared in <code>META</code>:</p>
+      <table>
+        <tbody>
+          <tr><td><code>script/js1</code></td><td><strong>Ships now.</strong> JavaScript source text, executed in a Worker inside a scrubbed realm. Source is mandatory and always visible.</td></tr>
+          <tr><td><code>wasm/1</code></td><td><strong>Reserved.</strong> Defined here, implemented later or never. A <code>wasm/1</code> cart without an accompanying source chunk is displayed with a visible unverifiable badge.</td></tr>
+        </tbody>
+      </table>
+
+      <h4>The scrubbed realm</h4>
+      <p>For <code>script/js1</code>, the runtime <span class="kw">MUST</span> delete from the cart's global scope, at minimum: <code>fetch</code>, <code>XMLHttpRequest</code>, <code>WebSocket</code>, <code>importScripts</code>, <code>Worker</code>, <code>SharedArrayBuffer</code>, <code>crypto</code>, <code>Date</code>, <code>performance</code>, <code>Intl</code>, <code>eval</code>, <code>Function</code>, <code>WeakRef</code>, <code>FinalizationRegistry</code> and <code>Math</code>. All intrinsic prototypes <span class="kw">MUST</span> be frozen. The Worker <span class="kw">MUST</span> be terminated if a single <code>tick()</code> exceeds the frame deadline by a configurable margin.</p>
+
+      <div class="why">
+        <span class="lbl">Why JavaScript source is the payload that ships</span>
+        <p><strong>Easy for anyone.</strong> No toolchain, no compile step, no new language. Type in a box and press run. And an AI writing carts is more reliable in JavaScript than in anything else by a wide margin, which matters a great deal for section 9.</p>
+        <p><strong>Lightweight, counterintuitively.</strong> You ship no interpreter at all &mdash; V8 and SpiderMonkey are already in the browser and already JIT-compiled. A hand-written bytecode VM would be elegant and roughly 5 to 20 times slower per operation, and you would own its performance forever.</p>
+        <p><strong>Verifiable in the way that matters.</strong> A hash over a binary proves identity, not safety: it says "this is the cart three thousand people played", and cannot say what the cart does. Source text gives you both &mdash; hash it and read it, with meaningful diffs between versions. Every cart is simultaneously a game, a tutorial and its own audit trail.</p>
+        <p><strong>The honest cost.</strong> You cannot hard-meter CPU in a Worker; you get a watchdog and a kill, not an instruction budget. And isolation is realm scrubbing rather than memory separation. Both are acceptable when the box around the cart has no network and no cookies &mdash; and if hard metering is ever needed, <code>wasm/1</code> is already reserved.</p>
+      </div>
+
+      <h3><span class="cn">5.3</span> Chunks</h3>
+      <p>Each chunk is a 4-character type, a <code>u32 LE</code> length, the payload, and zero padding to a 4-byte boundary. <strong>An uppercase first character means critical; lowercase means ancillary.</strong> A player <span class="kw">MUST</span> refuse a cart containing an unknown critical chunk, and <span class="kw">MUST</span> skip an unknown ancillary chunk without complaint.</p>
+      <div class="scroll">
+        <table class="mono">
+          <thead><tr><th>Type</th><th>Class</th><th>Contents</th></tr></thead>
+          <tbody>
+            <tr><td>META</td><td>critical</td><td>Title, author, profile, payload type, minimum ABI, declared budgets</td></tr>
+            <tr><td>CODE</td><td>critical</td><td>The payload</td></tr>
+            <tr><td>PAL&nbsp;</td><td>critical</td><td>The three colour tables, installed at <code>0x2000</code></td></tr>
+            <tr><td>GFX&nbsp;</td><td>critical</td><td>Sprite flags then sprite sheet &mdash; in that order, see 5.6</td></tr>
+            <tr><td>MAP&nbsp;</td><td>critical</td><td>Tile map</td></tr>
+            <tr><td>SFX&nbsp;</td><td>critical</td><td>Effect bank</td></tr>
+            <tr><td>MUS&nbsp;</td><td>critical</td><td>Pattern data</td></tr>
+            <tr><td>DATA</td><td>critical</td><td>Arbitrary cart data</td></tr>
+            <tr><td>labl</td><td>ancillary</td><td>128 x 128 label image</td></tr>
+            <tr><td>rcpe</td><td>ancillary</td><td>The recipe and module hashes that produced this cart</td></tr>
+            <tr><td>rndr</td><td>ancillary</td><td>Extended-profile renditions</td></tr>
+            <tr><td>sign</td><td>ancillary</td><td>ed25519 signature over every preceding byte</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="why">
+        <span class="lbl">Why steal PNG's case convention</span>
+        <p>The uppercase/lowercase rule is one sentence of specification that buys a decade of forward compatibility: a 2026 player can safely open a 2032 cart, ignoring the parts it was never told about, and refuse exactly the carts it genuinely cannot run. PNG has survived on that convention since 1996.</p>
+      </div>
+
+      <h3><span class="cn">5.4</span> Identity and signing</h3>
+<pre><code>cart_id = SHA-256( every byte of the canonical encoding except the sign chunk )
+          truncated to 160 bits, Crockford base32
+          displayed as 4 groups of 8:   K3PQ7W2M-N0XR8T4V-...</code></pre>
+      <p>The identity covers the label image and the recipe, and excludes only the signature. Signing is optional; an unsigned cart is valid but shows as unattributed.</p>
+
+      <div class="why">
+        <span class="lbl">Why SHA-256 and not BLAKE3</span>
+        <p>Draft 1 of this document specified BLAKE3. Implementation review changed it. BLAKE3 in portable JavaScript is several hundred lines of tree hashing &mdash; a second hash function to get bit-exact and keep that way forever &mdash; bought for a marginal speed win on 64 KB, where SHA-256 costs about a millisecond.</p>
+        <p>SHA-256 is already in the runtime as a pure 32-bit implementation with no platform branch, verified against the NIST vectors, and it is the same instrument that produces the conformance frame-hash chains. <strong>One hash function in the system beats two.</strong> A second one is a second thing that can disagree between implementations, and cart identity is exactly where disagreement is unaffordable.</p>
+      </div>
+
+      <div class="why">
+        <span class="lbl">Why the label is inside the hash</span>
+        <p>The tempting design excludes ancillary chunks so a cart can be re-labelled without changing identity. That is a scam vector: swap the screenshot on a well-known cart and you have a different game wearing its face at the same address. Only the signature is excluded, because it cannot cover itself.</p>
+      </div>
+
+      <h3><span class="cn">5.6</span> Where a cart's static data lands</h3>
+      <p>Section 3.3 says a cart's static data initializes <code>0x2000</code> through <code>0x77FF</code> at boot. These are the chunks that do it, and the regions they fill:</p>
+      <div class="scroll">
+        <table class="mono">
+          <thead><tr><th>Chunk</th><th>Address</th><th>Bytes</th><th>Region</th></tr></thead>
+          <tbody>
+            <tr><td>PAL&nbsp;</td><td>2000</td><td>224</td><td>PALETTE_HW, PALETTE_LIVE, DRAW_REMAP</td></tr>
+            <tr><td>GFX&nbsp;</td><td>4200 then 2200</td><td>8,448</td><td>SPRITE_FLAGS then SPRITES</td></tr>
+            <tr><td>MAP&nbsp;</td><td>4300</td><td>8,192</td><td>MAP</td></tr>
+            <tr><td>SFX&nbsp;</td><td>6300</td><td>3,328</td><td>SFX</td></tr>
+            <tr><td>MUS&nbsp;</td><td>7000</td><td>2,048</td><td>MUSIC</td></tr>
+            <tr><td>DATA</td><td>7800</td><td>34,560</td><td>USER_RAM</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Installation happens after RAM is zeroed <em>and</em> after the boot defaults are written, and <strong>before</strong> the cart's own <code>boot()</code> runs. Both halves are load-bearing: install before the defaults and the identity live palette overwrites the cart's own colours; install after <code>boot()</code> and a cart cannot read its own tiles on the frame it starts on.</p>
+      <p>A chunk shorter than its region fills from the start and leaves the rest as boot left it. A chunk longer than its region <span class="kw">MUST</span> be refused as a load error and <span class="kw">MUST NOT</span> be truncated. <strong>Nothing maps to <code>0x20E0..0x21FF</code> and nothing may</strong> &mdash; CLIP, CAMERA, the input bytes, FRAME, RNG_STATE and the audio registers live there, and a chunk reaching them could overwrite the seed the machine was booted with, making a cart's replay a function of its own data file.</p>
+
+      <div class="why">
+        <span class="lbl">Why <code>GFX&nbsp;</code> carries its flags first</span>
+        <p>Sprites and their flags are adjacent in RAM, and a sheet without its flags is half a tileset, so one chunk carries both &mdash; but <em>not</em> in address order. A flat image of <code>0x2200..0x42FF</code> would have to be at least 8,193 bytes long before it could say anything at all about a flag, because the flags begin at offset 8,192.</p>
+        <p>Measured on a real cart using 96 of the 256 cells, that is 3,072 bytes of pixels, then <strong>5,120 bytes of zeroes</strong>, then the flags &mdash; which cancels the entire saving this arrangement exists to make. Putting the fixed-size half first lets the split be a constant rather than a header, and leaves the variable-length half at the end where trailing zeroes trim away.</p>
+      </div>
+
+      <div class="why">
+        <span class="lbl">Why the palette is critical rather than ancillary</span>
+        <p>A cart whose live slots index a hardware palette it did not choose looks different on a player that ships a different reference table. Marking <code>PAL&nbsp;</code> critical means such a cart is refused by a player that does not understand it rather than silently rendered in the wrong colours &mdash; which is exactly the distinction the uppercase/lowercase rule exists to draw.</p>
+      </div>
+
+      <h3><span class="cn">5.7</span> Renditions</h3>
+      <p>A cart <span class="kw">MAY</span> carry additional renditions for extended profiles in <code>rndr</code>. The chunk directory sits in the header, so a lightweight player <span class="kw">MAY</span> issue an HTTP range request for the Universal Profile chunks alone and never download the rest. Rich carts stay rich; cheap players stay cheap.</p>
+    </section>
+
+    <!-- ============ 6 ============ -->
+    <section id="profiles" class="tier">
+      <p class="tier-label">Cross-cutting</p>
+      <h2>6. Profiles and the downlevel rule</h2>
+
+      <p class="lede">The single rule that keeps the library coherent:</p>
+      <p style="font-size:1.15rem;border-left:3px solid var(--accent-2);padding-left:1.1rem;max-width:var(--measure);"><strong>Every published cart MUST contain a valid Universal Profile rendition. Extensions may enhance. They may never gate.</strong></p>
+
+      <p>A cart declares its relationship to extensions the way glTF does, and the distinction is load-bearing:</p>
+<pre><code>uses     = ["pointer", "hires-256", "audio-8ch"]   soft: use it if present
+requires = []                                      hard: refuse to run without</code></pre>
+
+      <div class="why">
+        <span class="lbl">Why the fallback is mandatory rather than encouraged</span>
+        <p>Every platform that let extensions ship without a required fallback fragmented &mdash; early WebGL extensions, OpenGL ES, Android feature flags. Every platform that enforced one stayed coherent. The rule only works if a machine enforces it, which is why section 9's stamper refuses to pack a cart whose Universal rendition fails the prover.</p>
+      </div>
+
+      <h3><span class="cn">6.1</span> How stamping down works</h3>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Mechanism</th><th>Handles</th><th>Author effort</th></tr></thead>
+          <tbody>
+            <tr><td>Automatic asset downlevel</td><td>64 colors to 16 with a specified dither; 256 x 256 art to 128 x 128; 8-channel mixdown to 4; a 12-button scheme onto 8 via a declared mapping table</td><td>None &mdash; deterministic processing in the stamper</td></tr>
+            <tr><td>Declared degradation</td><td>A <code>[downlevel]</code> block naming features to drop and knob values to substitute</td><td>About ten lines</td></tr>
+            <tr><td>Separate Universal recipe</td><td>Cases where the rich version is genuinely a different game</td><td>Full, always available</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="why">
+        <span class="lbl">Why input cannot be downleveled, and the rule that follows</span>
+        <p>Automatic downlevel works on <em>assets</em> and never on <em>mechanics</em>. There is no transformation that turns "requires a mouse" into buttons. So: <strong>an extension may add fidelity and convenience; it may not add a mechanic required to finish the game.</strong> A pointer may make aiming nicer, and the game must still be completable on eight buttons. That is checkable rather than aspirational &mdash; the prover runs the Universal rendition to completion against a button-only replay.</p>
+      </div>
+    </section>
+
+    <!-- ============ 7 ============ -->
+    <section id="tier-e" class="tier">
+      <p class="tier-label">Tier E</p>
+      <h2>7. Engines</h2>
+      <p class="tier-radius">Blast radius: carts that opt in. Free to evolve, because a cart pins a version and the engine is just payload inside it.</p>
+
+      <p>An engine is a behavior template: an entity model, an update loop, and a declared set of knobs. Engines are <strong>not part of the machine</strong>. They ship as modules, they are compiled into the cart, and a cart from 2026 keeps the engine it was built with forever.</p>
+      <p>Planned first set: <code>platformer</code>, <code>topdown</code>, <code>shmup</code>, <code>puzzle-grid</code>. The second one is the one that matters &mdash; see section 13.</p>
+
+      <div class="why">
+        <span class="lbl">Why engines live outside the spec</span>
+        <p>This is the whole reason for the tier ordering. Engines and art are where all the volume and all the fun are, and putting them inside the machine would make every one of them a compatibility liability. Outside it, they are data: versionable, forkable, replaceable, and free.</p>
+      </div>
+    </section>
+
+    <!-- ============ 8 ============ -->
+    <section id="tier-f" class="tier">
+      <p class="tier-label">Tier F</p>
+      <h2>8. Modules and recipes</h2>
+      <p class="tier-radius">Blast radius: nothing. This is where the ecosystem lives.</p>
+
+      <h3><span class="cn">8.1</span> Modules</h3>
+      <p>Everything loadable is a module: content-addressed, versioned, and carrying a manifest that declares what it <strong>provides</strong> and what it <strong>requires</strong>.</p>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Kind</th><th>Contains</th><th>Example</th></tr></thead>
+          <tbody>
+            <tr><td><code>engine</code></td><td>Entity model, update loop, exposed knobs</td><td><code>platformer@2.1</code></td></tr>
+            <tr><td><code>palette</code></td><td>16 of 64 colors</td><td><code>gameboy@1</code></td></tr>
+            <tr><td><code>tileset</code></td><td>Pixels plus per-tile flags</td><td><code>caves-8x8@3</code></td></tr>
+            <tr><td><code>spriteset</code></td><td>Pixels plus animation frame tables</td><td><code>hero-4dir@1</code></td></tr>
+            <tr><td><code>soundbank</code></td><td>Synth patch definitions</td><td><code>chip-basic@1</code></td></tr>
+            <tr><td><code>content</code></td><td>Maps, levels, dialogue, tables</td><td><code>world1</code></td></tr>
+            <tr><td><code>tuning</code></td><td>Knob values only</td><td><code>floaty-jump@1</code></td></tr>
+            <tr><td><code>shell</code></td><td>Bezel, font, HUD, touch layout</td><td><code>arcade-cab@1</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4>A module manifest</h4>
+<pre><code>[module]
+kind    = "engine"
+name    = "platformer"
+version = "2.1"
+
+[provides]
+entities = 64
+calls    = ["spawn", "kill", "solid_at"]
+
+[requires]
+tileset = { min_tiles = 64, flags = ["solid", "hazard", "ladder"] }
+palette = true
+knobs   = ["gravity", "jump_velocity", "coyote_frames", "run_accel", "max_run"]</code></pre>
+
+      <div class="why">
+        <span class="lbl">Why modules declare an interface, not just data</span>
+        <p>This is the decision the whole stamping system turns on. Because an engine states what it needs and a tileset states what it offers, <strong>a recipe can be type-checked before anything is built.</strong> That is the difference between a template system that stamps working carts and one that stamps plausible-looking broken ones.</p>
+      </div>
+
+      <h3><span class="cn">8.2</span> The recipe</h3>
+      <p>The recipe is the source; the cart is the build artifact. Recipes go in git. Carts go in the registry.</p>
+<pre><code>[cart]
+title   = "Cave Runner"
+author  = "eric"
+profile = "up"
+spec    = 1
+
+[engine]
+use = "platformer@2.1"          # blake3:9f3a1c...
+
+[modules]
+palette   = "sweetie16@1"
+tileset   = "caves-8x8@3"
+spriteset = "hero-4dir@1"
+soundbank = "chip-basic@1"
+content   = "./world1.map"
+
+[tuning]
+gravity        = 0.42
+jump_velocity  = -3.10
+coyote_frames  = 6
+run_accel      = 0.35
+max_run        = 2.00</code></pre>
+
+      <p>Layers merge in declared order and later keys win, exactly as CSS and container images do: <code>engine &rarr; genre pack &rarr; art pack &rarr; tuning &rarr; cart overrides</code>. A recipe <span class="kw">MAY</span> carry inline custom code, which counts against the same token budget as everything else.</p>
+
+      <div class="why">
+        <span class="lbl">Why layers, and why the escape hatch is taxed</span>
+        <p>Layers are content-addressed and shared, so a hundred carts using one tileset store it once and ship only their diffs. And the escape hatch has to exist &mdash; without it the system is a toy that can only make games it already knows &mdash; but taxing it keeps it the exception rather than the path of least resistance.</p>
+      </div>
+    </section>
+
+    <!-- ============ 9 ============ -->
+    <section id="tier-g" class="tier">
+      <p class="tier-label">Tier G</p>
+      <h2>9. The stamper</h2>
+      <p class="tier-radius">Blast radius: nothing. But this is the machine that makes the rest usable.</p>
+
+      <p>The stamper is not a code generator. It is a resolver and a merger &mdash; a far more reliable class of program, and one whose failures are validation errors with line numbers rather than crashes three minutes into a playtest.</p>
+
+<pre><code>  recipe.toml
+      |
+  [1] RESOLVE    name@version -&gt; content hash -&gt; module bytes
+      |
+  [2] MERGE      layer in declared order; later key wins
+      |
+  [3] BIND       knobs -&gt; values; an unbound required knob is an error
+      |
+  [4] VALIDATE   interfaces, budgets, ABI minor, profile rules
+      |
+  [5] COMPILE    engine + content -&gt; payload, canonical byte order
+      |
+  [6] PACK       chunks -&gt; .cart; hash -&gt; cart_id; optional sign
+      |
+  [7] PROVE      headless run, 600 frames, replay input,
+      |          frame-hash chain must match
+      v
+  game.cart      immutable, content-addressed, playable</code></pre>
+
+      <h3><span class="cn">9.1</span> Reproducible builds</h3>
+      <p>The same recipe with the same module versions <span class="kw">MUST</span> produce a byte-identical cart. This is what makes the content hash meaningful, makes caching free (<code>immutable, max-age=31536000</code>), and turns "this cart is what its recipe claims" into a fact anyone can check without trusting the publisher or the registry.</p>
+
+      <h3><span class="cn">9.2</span> The prover</h3>
+      <p>A cart is not packed until it has been run headless for at least 600 frames against a replay, with the SHA-256 chain of per-frame framebuffer hashes recorded into <code>rcpe</code>. For a cart declaring extended profiles, the <em>Universal</em> rendition is the one that must pass.</p>
+
+      <h3><span class="cn">9.3</span> Where the AI sits</h3>
+<pre><code>  SPEC.md  --[ AI ]--&gt;  recipe.toml  --[ stamper ]--&gt;  cart  --[ prover ]--&gt;  pass/fail
+                             ^                                                    |
+                             +------- knob edits from the play overlay -----------+</code></pre>
+
+      <div class="why">
+        <span class="lbl">Why the AI writes recipes and not code</span>
+        <p>Forty lines of validated data instead of two thousand lines of hopeful JavaScript. The nondeterministic step produces something small and checkable; the deterministic step is actually deterministic. Iteration becomes a knob tweak and a sub-second rebuild rather than a code edit and a page reload &mdash; which is the same finding as "sliders beat asking the model to recode values", generalized into an architecture.</p>
+      </div>
+
+      <h3><span class="cn">9.4</span> Module promotion</h3>
+      <p>Inline in one cart &rarr; extracted to a local module &rarr; published with a version. The trigger is the second use, never the first.</p>
+    </section>
+
+    <!-- ============ 10 ============ -->
+    <section id="security">
+      <h2>10. Security model</h2>
+      <p class="lede">Almost all of this falls out of decisions made for other reasons. Where a threat is stopped by architecture rather than by policing, it stays stopped without anyone being paid to watch.</p>
+
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Threat</th><th>What stops it</th></tr></thead>
+          <tbody>
+            <tr><td>Someone edits a popular cart and reuploads it</td><td>Content-addressed identity. A modified cart is a different cart at a different address</td></tr>
+            <tr><td>Impersonating an author</td><td><code>sign</code> chunk, ed25519. Verifies against the author key or shows unattributed</td></tr>
+            <tr><td>Cart exfiltrates data, mines, or phones home</td><td>Structurally impossible. There is no network in the sandbox &mdash; not policed, absent</td></tr>
+            <tr><td>Cart draws a fake login or payment screen</td><td>Cannot draw outside 128 x 128, cannot open a URL, has nowhere to submit. It can draw a lie and cannot deliver it</td></tr>
+            <tr><td>Poisoned module reaches a thousand carts</td><td>Hash-pinned recipe plus reproducible builds. Anyone can rebuild and compare the cart id</td></tr>
+            <tr><td>Faked high scores</td><td>Replays are proofs. Re-simulate a 3 KB input log server-side</td></tr>
+            <tr><td>Cart hangs the device</td><td>Worker watchdog and terminate</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3><span class="cn">10.1</span> Containment layers</h3>
+      <p>A conformant player <span class="kw">MUST</span> run cart code on a <strong>separate origin</strong>, in an iframe with <code>sandbox="allow-scripts"</code> and <em>without</em> <code>allow-same-origin</code>, under a Content Security Policy including <code>connect-src 'none'</code>, inside a Worker it can terminate. A cart that escapes the realm scrub still lands in a box with no network and no cookies.</p>
+
+      <h3><span class="cn">10.2</span> What a host must not do with a cart's own words</h3>
+      <p>Three strings originate with the cart author and travel outward into the host's interface. Each is a channel, and each has a rule.</p>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>String</th><th>Rule</th></tr></thead>
+          <tbody>
+            <tr><td>The <code>META</code> title</td><td>Rendered as <strong>text, never markup</strong>. Capped at 64 UTF-8 bytes and free of control characters at the container level, so the cap is enforced before a host sees it. It <span class="kw">MUST NOT</span> be placed where a system message appears.</td></tr>
+            <tr><td>A load or validation <strong>error message</strong></td><td>Error messages name the chunk and quote the title, so a rejected cart's own text ends up inside a diagnostic. A host <span class="kw">MUST NOT</span> render one as HTML. This is the least obvious of the three, because the string reads like the host's own words and is not.</td></tr>
+            <tr><td>Anything drawn to the screen</td><td>Confined to the 128 x 128 framebuffer by construction; no rule needed beyond section 3.6.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="why">
+        <span class="lbl">Why an error message is a cart-controlled string</span>
+        <p>Found while building the reference player, in the reference player. A hostile cart cannot reach the DOM &mdash; but it can choose its own title, get itself rejected on purpose, and have the host paste the resulting sentence into the page. If that sentence is written with <code>innerHTML</code> the cart has markup injection into the shell, from a code path whose entire purpose was refusing it.</p>
+        <p>The general shape is worth remembering: <strong>a diagnostic about untrusted input is itself untrusted output.</strong> Sanitising the input and then interpolating it into an error you trust puts the taint straight back.</p>
+      </div>
+
+      <h3><span class="cn">10.3</span> In-process execution is not a deployment mode</h3>
+      <p>Realm hardening cannot run on a realm shared with the page: deleting <code>Function</code> or freezing intrinsics would break the host around it. So a player that runs a cart on the main thread has <strong>Layer 1 only</strong>, and the escapes recorded in the canary suite are open.</p>
+      <p>That configuration is legitimate for tests and for authoring tools, and it <span class="kw">MUST NOT</span> be the default for a player that loads carts a person did not write. A conformant player <span class="kw">MUST</span> default to a real Worker with the realm scrubbed, and any in-process path <span class="kw">MUST</span> be opt-in and named as such.</p>
+    </section>
+
+    <!-- ============ 11 ============ -->
+    <section id="conformance">
+      <h2>11. Conformance</h2>
+      <p>An implementation may call itself Square One 1 conformant if and only if:</p>
+      <ol class="list">
+        <li>It passes the golden-master suite: for every published test cart and replay, the SHA-256 chain of per-frame framebuffer hashes matches the published chain <strong>exactly</strong>.</li>
+        <li>It implements the full Tier C ABI at the minor it declares.</li>
+        <li>It refuses carts with unknown critical chunks and accepts carts with unknown ancillary chunks.</li>
+        <li>It never exposes wall-clock time, network, or host storage to a cart.</li>
+        <li>It draws the shell outside the 128 x 128 window and never lets a cart write there.</li>
+      </ol>
+
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Normative &mdash; must match bit for bit</th><th>Implementation-defined</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>Framebuffer contents at the end of every tick; PRNG sequence; fixed-point arithmetic and rounding; input sampling order; chunk parsing and rejection; cart id derivation</td>
+              <td>Upscaling filter and any CRT treatment; audio mixing quality beyond the specified waveforms; shell appearance; editor behavior; frame presentation timing</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="why">
+        <span class="lbl">Why audio is not normative</span>
+        <p>Audio does not feed back into simulation state &mdash; the sim emits commands and the mixer consumes them, one way only. So mixing quality can differ between a phone and a desktop without any replay diverging. Building that one-way street is also why the audio clock must never drive game timing.</p>
+      </div>
+    </section>
+
+    <!-- ============ 12 ============ -->
+    <section id="open">
+      <h2>12. Open questions</h2>
+      <ul>
+        <li><strong>System font.</strong> Is the 4 x 6 font in ROM, and does a cart's custom font count against the sprite budget or the cart budget?</li>
+        <li><strong>Save region across renditions.</strong> One save keyed by cart id, shared by every rendition &mdash; or one per rendition? Sharing is friendlier and risks a rich rendition writing a layout the Universal one cannot read.</li>
+        <li><strong>Waveform definitions.</strong> The five waveforms need exact sample-level definitions if anyone ever wants audio to be normative.</li>
+        <li><strong>Whether <code>wasm/1</code> is ever implemented.</strong> Reserving it costs a paragraph. Building it is a project.</li>
+        <li><strong>The name.</strong> Square One is a working title.</li>
+      </ul>
+    </section>
+
+    <!-- ============ 13 ============ -->
+    <section id="order">
+      <h2>13. Build order</h2>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Phase</th><th>Deliverable</th><th>Why here</th></tr></thead>
+          <tbody>
+            <tr><td>0</td><td>Tier A frozen, on paper. No code.</td><td>The only irreversible decisions in the project</td></tr>
+            <tr><td>1</td><td>Runtime skeleton &mdash; boot, framebuffer, input, one sprite &mdash; <strong>and the frame-hash golden-master harness</strong></td><td>Retrofitting determinism tests after drift has entered is misery</td></tr>
+            <tr><td>2</td><td>Container plus CLI: <code>build</code>, <code>run</code>, <code>validate</code>, <code>hash</code></td><td>Everything downstream needs a cart to exist</td></tr>
+            <tr><td>3</td><td>One engine, one art pack, the stamper. One recipe to one playable cart.</td><td>Proves the whole spine end to end</td></tr>
+            <tr><td>4</td><td>A second engine, in a different genre</td><td>The only real test of whether the module interface is right. Do not design for N genres before shipping two</td></tr>
+            <tr><td>5</td><td>Editors and the knob overlay</td><td>Turns a library into a console</td></tr>
+            <tr><td>6</td><td>Registry, <code>.cart.png</code>, signing</td><td>Distribution</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <footer>
+    <span>Square One Console Specification &mdash; Draft 1</span>
+    <span>Spec 1.0.0-draft</span>
+    <span>Every number carries its reason</span>
+  </footer>
+
+</div>

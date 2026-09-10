@@ -1,0 +1,17 @@
+{
+  "name": "@sq1/cart",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Square One cart container: chunk codec, canonical serialization, cart id. Zero runtime dependencies.",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@sq1/core": "*"
+  },
+  "scripts": {
+    "test": "vitest run"
+  }
+}

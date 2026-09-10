@@ -1,0 +1,130 @@
+# `overworld` -- 64 tiles of grass, masonry, water, brambles, doors and props.
+#
+# HOW TO CHANGE IT
+# ----------------
+# Edit the art in gen.mjs -- one hex digit per pixel, one string per row -- and
+# then regenerate:
+#
+#     node modules/overworld/gen.mjs
+#
+# tiles.bin is OUTPUT. Never edit it: a .bin cannot be reviewed, and a pixel
+# changed there and not in gen.mjs is lost the next time anyone regenerates.
+#
+# THE FILE FORMAT
+# ---------------
+#     bytes 0..2047     pixels, 32 rows of 64 bytes, in the console's own sheet
+#                       layout: 128 pixels per row at 4bpp, EVEN x in the LOW
+#                       nibble. Four sheet rows of sixteen cells = 64 tiles.
+#     bytes 2048..2111  flags, one byte per tile, in tile order.
+#
+# The stamper copies the pixels into the sprite sheet starting at cell `base`
+# and the flags to SPRITE_FLAGS + base. With base = 0 both are straight copies.
+#
+# TILE 0 IS EMPTY AND IS NEVER DRAWN -- the console's rule, not this pack's.
+#
+# WHAT IS DIFFERENT ABOUT A TOP-DOWN TILESET
+# ------------------------------------------
+# Three flags rather than two. `solid` and `hazard` mean what they mean in
+# `caves`; `door` is new, and it is a flag that says a tile can be OPERATED --
+# the engine replaces it with `tile_door_open` when a walker with a key faces it.
+# A platformer never needs to say that about a tile.
+#
+# Note what this manifest CANNOT say, which modules/topdown/INTERFACE-NOTES.md is
+# partly about: `[provides] flags` names the three flags, and `solid_flag = 1`
+# below records which bit each one uses -- but no engine can read those numbers.
+# `[requires] tileset = { flags = [...] }` checks the NAMES and nothing else, so
+# a recipe has to copy the three bit values into the engine's `*_flag` knobs by
+# hand. Both modules know the answer; the format has no way to pass it.
+#
+# DRAWN FOR the `sweetie16` palette, read as an overworld rather than as a cave.
+# See gen.mjs for what each digit is doing here.
+
+[module]
+kind    = "tileset"
+name    = "overworld"
+version = "1.0.0"
+
+[provides]
+tiles  = 64
+tile_w = 8
+tile_h = 8
+# The sheet cell this pack starts at. 0 is the top-left of the sheet, so the
+# tile index a map cell holds is also the sprite index the console draws.
+base   = 0
+data   = "tiles.bin"
+
+# The flags this pack marks, and the SPRITE_FLAGS bit each one uses. An engine
+# that requires `flags = ["solid", "hazard", "door"]` is asking for this table.
+flags       = ["solid", "hazard", "door"]
+solid_flag  = 1
+hazard_flag = 2
+door_flag   = 4
+
+# What every index is. Advisory: the bytes in tiles.bin are the truth, and this
+# is here so a person writing a recipe -- or a tool offering completion for one
+# -- does not have to open the art to find out which tile is the grass.
+[names]
+empty        = 0
+grass        = 1
+grass_tuft   = 2
+grass_flower = 3
+grass_pebble = 4
+path         = 5
+path_worn    = 6
+sand         = 7
+sand_ripple  = 8
+moss         = 9
+moss_clump   = 10
+wall         = 11
+wall_top     = 12
+wall_left    = 13
+wall_right   = 14
+wall_bottom  = 15
+wall_tl      = 16
+wall_tr      = 17
+wall_ruin    = 18
+boulder      = 19
+rock_small   = 20
+cliff        = 21
+pillar       = 22
+water        = 23
+water_ripple = 24
+shore_n      = 25
+shore_s      = 26
+shore_w      = 27
+shore_e      = 28
+bramble      = 29
+bramble_deep = 30
+spikes       = 31
+fire         = 32
+bog          = 33
+door         = 34
+door_open    = 35
+gate         = 36
+gate_open    = 37
+floor        = 38
+floor_crack  = 39
+floor_check  = 40
+rug          = 41
+stair        = 42
+chest        = 43
+altar        = 44
+brazier      = 45
+tree         = 46
+pine         = 47
+stump        = 48
+bush         = 49
+sign         = 50
+fence_h      = 51
+fence_v      = 52
+well         = 53
+statue       = 54
+barrel       = 55
+bridge_h     = 56
+bridge_v     = 57
+grass_tall   = 58
+mushrooms    = 59
+crystal      = 60
+grave        = 61
+marker       = 62
+checker      = 63

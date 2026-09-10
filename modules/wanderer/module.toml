@@ -1,0 +1,90 @@
+# `wanderer` -- a four-direction walker, two enemies and two pickups.
+#
+# HOW TO CHANGE IT
+# ----------------
+# Edit the art in gen.mjs and regenerate:
+#
+#     node modules/wanderer/gen.mjs
+#
+# sprites.bin is OUTPUT. See modules/overworld/module.toml for why a .bin is
+# never hand-edited.
+#
+# THE FILE FORMAT
+# ---------------
+#     bytes 0..1023     pixels, 16 rows of 64 bytes, in the console's sheet
+#                       layout. Two sheet rows of sixteen cells = 32 cells.
+#     bytes 1024..1055  flags, one byte per cell. All zero: these are entity
+#                       sprites, and the flag byte is what a TILESET uses.
+#
+# EVERY SPRITE IS ONE CELL
+# ------------------------
+# `hero` is 8 x 16 because a side-on runner is taller than it is wide. A walker
+# seen from above is not, so every cell here is a whole sprite and an engine
+# draws it with the console's default `gfx.spr(n, x, y)`. That is why `[sizes]`
+# below says `cells_h = 1` where `hero` says 2.
+#
+# THE FRAME ORDER IS A CONTRACT, AND THE FORMAT CANNOT STATE IT
+# ------------------------------------------------------------
+# The eight walk cells are FOUR DIRECTIONS of TWO FRAMES, in the order
+# `topdown` numbers its facings: down, up, left, right. The engine is given the
+# first cell and the stride between directions and counts from there. The four
+# slash cells follow in the same order.
+#
+# Nothing in `[provides]` or `[requires]` can say that. An engine can ask for
+# `min_sprites = 20`; it cannot ask for "a spriteset whose walk cycle is laid out
+# down, up, left, right". `[names]` below records the layout for a human, and the
+# stamper does not read `[names]`. modules/topdown/INTERFACE-NOTES.md proposes
+# what would fix it.
+#
+# DRAWN FOR the `sweetie16` palette, the same sixteen the `overworld` pack uses.
+
+[module]
+kind    = "spriteset"
+name    = "wanderer"
+version = "1.0.0"
+
+[provides]
+sprites = 32
+cell_w  = 8
+cell_h  = 8
+# The sheet cell this pack starts at: 64 is the start of sheet row 4, leaving
+# rows 0..3 -- cells 0..63 -- to the tileset.
+base    = 64
+data    = "sprites.bin"
+
+# Frame indices, as absolute sheet cells. Advisory, like the overworld table:
+# these are the numbers a recipe puts in the engine's sprite_* knobs.
+#
+# `walk` is the base of the whole eight-cell block. Direction d starts at
+# walk + d * 2, with d = 0 down, 1 up, 2 left, 3 right, and each direction has
+# two frames. `slash` is the base of four single cells in the same order.
+[names]
+walk       = 64   # 64,65 down  66,67 up  68,69 left  70,71 right
+walk_down  = 64
+walk_up    = 66
+walk_left  = 68
+walk_right = 70
+slash      = 72   # 72 down  73 up  74 left  75 right
+chaser     = 76   # and 77
+patroller  = 78   # and 79
+coin       = 80
+key        = 81
+heart      = 82
+pot        = 83
+
+# How big each thing is, for an engine that wants to size a collision box from
+# the art rather than from a knob.
+[sizes]
+walker    = { w = 8, h = 8, cells_w = 1, cells_h = 1 }
+chaser    = { w = 8, h = 8, cells_w = 1, cells_h = 1 }
+patroller = { w = 8, h = 8, cells_w = 1, cells_h = 1 }
+pickup    = { w = 8, h = 8, cells_w = 1, cells_h = 1 }
+
+# How the walk block is laid out, so a reader does not have to infer it from the
+# [names] table. Advisory: the stamper reads neither this nor [names].
+[sizes.walk_block]
+directions   = 4
+frames       = 2
+dir_stride   = 2
+frame_stride = 1
+order        = "down, up, left, right"

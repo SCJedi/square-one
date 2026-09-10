@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Square One</title>
+    <style>
+      /*
+        The page is a frame for one element and nothing else. `100dvh` rather
+        than `100vh` because on a phone `vh` is the height the viewport has when
+        the browser's own chrome is hidden -- so a `100vh` console is exactly as
+        tall as the screen plus the address bar, and its d-pad sits underneath
+        the bottom edge until the user scrolls, which they will not think to do.
+      */
+      :root { color-scheme: light dark; }
+      html, body { margin: 0; padding: 0; height: 100%; background: #0f0e0d; }
+      #console {
+        position: relative;
+        width: 100%;
+        height: 100dvh;
+        height: 100vh;
+        overflow: hidden;
+      }
+      #fallback {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-content: center;
+        gap: 8px;
+        padding: 24px;
+        text-align: center;
+        color: #cfc9bd;
+        font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      }
+      #fallback code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        background: #26241f;
+        padding: 2px 6px;
+        border-radius: 4px;
+      }
+      #fallback[hidden] { display: none; }
+    </style>
+  </head>
+  <body>
+    <!--
+      ONE ELEMENT. The console builds its own DOM inside this div: bezel, title,
+      player lights, pause and the touch controls are all console-owned, and the
+      cart gets a 128 x 128 canvas and nothing else. That is the point of the
+      demo as much as the game is -- the page around the console has no more
+      access to the cart than the cart has to the page.
+    -->
+    <div id="console"></div>
+    <div id="fallback">
+      <strong>Loading a cart&hellip;</strong>
+    </div>
+
+    <script type="module">
+      import { createPlayer } from "../../packages/player/src/index.ts";
+      import {
+        SPEC_MAJOR,
+        SPEC_MINOR,
+        defaultMeta,
+        encode,
+        encodeMeta,
+      } from "../../packages/cart/src/index.ts";
+
+      const mount = document.getElementById("console");
+      const fallback = document.getElementById("fallback");
+
+      /**
+       * Report a failure without ever putting cart-derived text into markup.
+       *
+       * `loadCartBytes` embeds the cart's own META title in some of its
+       * messages, so this string is partly written by the cart. It goes in
+       * through `textContent`, which makes it text and can never make it
+       * markup. Building the same thing with `innerHTML` would hand a hostile
+       * cart the page around the console -- which is the one thing the whole
+       * shell design exists to prevent.
+       */
+      function fail(message) {
+        fallback.hidden = false;
+        fallback.replaceChildren();
+        const head = document.createElement("strong");
+        head.textContent = "The cart did not load.";
+        const why = document.createElement("div");
+        why.textContent = message;
+        const how = document.createElement("div");
+        how.append("Serve the repository root: ");
+        const cmd = document.createElement("code");
+        cmd.textContent = "npx vite";
+        how.append(cmd, " then open /examples/player/index.html");
+        fallback.append(head, why, how);
+      }
+
+      /**
+       * Which cart to play. `?cart=<name>` loads `examples/<name>.cart`.
+       *
+       * Defaults to `red-breaker` because it is the one with a game in it; the
+       * others are here so the page is a way to try any of them without
+       * editing this file.
+       */
+      const CARTS = ["red-breaker", "cave-runner", "deep-run", "moss-keep", "hello"];
+      const wanted = new URLSearchParams(location.search).get("cart") ?? CARTS[0];
+
+      /**
+       * Get cart bytes, two ways, in order of preference.
+       *
+       * 1. `examples/<name>.cart`, if `sq1 stamp` or `sq1 build` has been run.
+       *    That is the real artifact: a content-addressed container off the disk.
+       * 2. Otherwise, and only for `hello`, pack one in the browser out of
+       *    `examples/hello/main.js`, which IS committed. The demo then runs with
+       *    no build step at all, which matters because a demo that needs a prior
+       *    command is a demo that half the people who try it never see working.
+       *    A stamped cart cannot be rebuilt in the browser -- it needs its
+       *    modules -- so for those the honest answer is to say what to run.
+       *
+       * Both paths hand `createPlayer` the same thing: a byte array that has to
+       * survive `decode` and `loadCartBytes` like any other cart. Neither one
+       * gets a shortcut into the machine.
+       */
+      async function cartBytes() {
+        const built = await fetch(`../${wanted}.cart`).catch(() => null);
+        if (built !== null && built.ok) {
+          return new Uint8Array(await built.arrayBuffer());
+        }
+        if (wanted !== "hello") {
+          throw new Error(
+            `examples/${wanted}.cart is not built. Run:  npm run sq1 -- stamp examples/${wanted}`,
+          );
+        }
+        const src = await fetch("../hello/main.js");
+        if (!src.ok) throw new Error("examples/hello/main.js is not reachable from here");
+        const code = new TextEncoder().encode(await src.text());
+        const meta = defaultMeta("Hello", "square one");
+        return encode({
+          specMajor: SPEC_MAJOR,
+          specMinor: SPEC_MINOR,
+          chunks: [
+            { type: "META", data: encodeMeta(meta) },
+            { type: "CODE", data: code },
+          ],
+        });
+      }
+
+      try {
+        const bytes = await cartBytes();
+        /*
+          NO SANDBOX OPTION IS PASSED, AND THAT IS THE POINT. `createPlayer`
+          defaults to a real Worker whose realm `scrubRealm` has hardened, so
+          this is what a page gets by writing the shortest thing that works:
+          Layers 0, 1 and 2, and the six escapes in
+          conformance/canaries/README.md closed. The worker module is
+          packages/player/src/cart-worker.ts, built by the bundler from the
+          `new Worker(new URL(...))` in player.ts -- there is nothing for this
+          page to wire up.
+
+          `unsafeInProcess: true` runs the cart on THIS thread instead, with
+          Layer 1 only. Do not reach for it here: the cart this page loads is
+          fetched, and a fetched cart is a stranger's.
+        */
+        const player = createPlayer({ mount, cart: bytes, seed: 0 });
+        player.start();
+        fallback.hidden = true;
+        // Handy from the console: `sq1.frame`, `sq1.pause()`, `sq1.stop()`.
+        globalThis.sq1 = player;
+      } catch (e) {
+        fail(e instanceof Error ? e.message : String(e));
+      }
+    </script>
+  </body>
+</html>

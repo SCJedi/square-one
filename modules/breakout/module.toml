@@ -1,0 +1,768 @@
+# The `breakout` engine -- Red Breaker's mechanics, and none of its levels.
+#
+# The third engine module, and the first that is a GAME rather than a genre
+# kernel. `platformer` and `topdown` build their own worlds out of a seed; this
+# one builds nothing. Ten level headers arrive in the `DATA` chunk at 0x7800 and
+# ten 16 x 12 block grids arrive in the `MAP ` chunk, both laid out by
+# modules/FORMATS-breakout.md, which neither this module nor the level pack
+# owns. Point a recipe at a different pack and it is a different game.
+#
+# THAT IS WHY THE KNOBS BELOW LOOK THE WAY THEY DO. A number describing A LEVEL
+# -- ball speed, paddle width, drop chance, how many balls serve -- is NOT here,
+# because it is a header byte. A number describing THE GAME -- how fast the
+# paddle slides, how a bounce angles off it, how long a power-up lasts, which
+# palette slot a tough block is -- is here, and there are no magic numbers left
+# in engine.js except the machine's own (128 pixels to a screen, 16 subpixels to
+# a pixel because that is the unit the header speaks).
+#
+# NONE OF THE 83 KNOBS IS REQUIRED, which is the opposite of `topdown`'s
+# 86-with-24-required and worth a sentence. A required knob is the right shape
+# for something an engine CANNOT DRAW WITHOUT -- there is no sensible default
+# for "which tile is the floor". This engine can always draw: pair it with a
+# spriteset and it blits the sheet, pair it with none and it falls back to
+# filled rectangles in live palette slots, the way the original arcade cabinet
+# drew coloured bars. So every knob has a defensible default and a recipe may
+# set as few as none.
+#
+# EXACTLY ONE KNOB CARRIES `indexes`, AND IT IS `sprite_base`. modules/README.md
+# states the test exactly: it is whether engine.js hands the value to `gfx.spr`
+# or to `setTile`. `sprite_base` is handed to `gfx.spr` and `gfx.sspr` as the
+# base of every cell the engine draws, so it is bounded against the pack the
+# recipe actually chose. Nothing else here is: the art table lives in
+# modules/FORMATS-breakout-art.md and the engine adds a FIXED OFFSET to this one
+# number, so there is no knob per cell to annotate and no way for a recipe to
+# move one cell out from under the rest.
+#
+# The near-miss column of that table is the rest of this manifest. `max_fx` is a
+# COUNT of effect slots, `fx_frames` a DURATION, `red_flash` and `beam_flow` and
+# `drop_spin` are PERIODS in frames, every `*_color` is a LIVE PALETTE SLOT and
+# every `sfx_*` is a soundbank id. Annotating any of them would bound a period
+# against a cell count: a check that refuses a correct manifest, which is worse
+# than the absent check it replaced.
+
+[module]
+kind    = "engine"
+name    = "breakout"
+version = "1.0.0"
+
+[provides]
+# The ceiling on balls in play at once. The header's BALL_COUNT chooses how many
+# of them a level serves, and the `multi` drop fills the rest.
+balls = 4
+
+[requires]
+# A palette, so the sixteen slots the colour knobs name mean something.
+palette   = true
+# A spriteset is something this engine USES AND DOES NOT NEED, and `false` is
+# the manifest's word for exactly that. Pair one and every block, the paddle,
+# the ball, the drops, the shots, the beam and the effects come off the sheet at
+# `sprite_base`; pair none and the engine draws the same game in filled
+# rectangles. It decides which at boot by reading the sheet, not by reading a
+# knob -- see the head of engine.js -- so a missing art pack costs the cart its
+# pictures and never its picture.
+tileset   = false
+spriteset = false
+soundbank = false
+# The level pack is a `content` module: it supplies the `MAP ` and `DATA`
+# chunks. There is no `content` key in [requires] and that is the honest state
+# of the format today -- see README.md in this directory. Without the chunks the
+# engine boots to an empty grid, clears it on frame one, and walks the levels.
+
+
+# ============================================================================
+# The field
+#
+# grid_w x grid_h at block_w x block_h must cover the screen width:
+# 16 x 8 = 128. FORMATS-breakout.md fixes the grid at 16 x 12, and these are
+# knobs anyway, because a pack that wants a 32-column field should be able to
+# have one without touching engine.js.
+# ============================================================================
+
+[knobs.grid_w]
+type    = "int"
+default = 16
+min     = 1
+max     = 32
+doc     = "Blocks across one level, and the stride of the block grid in RAM. The map format gives a level 16 columns."
+
+[knobs.grid_h]
+type    = "int"
+default = 12
+min     = 1
+max     = 16
+doc     = "Rows of blocks in one level. Capped at 16 because the drifting-row mask is two bytes."
+
+[knobs.block_w]
+type    = "int"
+default = 8
+min     = 2
+max     = 32
+doc     = "A block's width in pixels. grid_w * block_w should be 128, or the field does not fill the screen."
+
+[knobs.block_h]
+type    = "int"
+default = 6
+min     = 2
+max     = 16
+doc     = "A block's height in pixels. Must stay larger than step_max, or a fast ball could cross a row inside one substep."
+
+[knobs.field_top]
+type    = "int"
+default = 10
+min     = 0
+max     = 64
+doc     = "Screen row the top row of blocks starts at. The gap above it is the HUD strip."
+
+[knobs.ceiling_y]
+type    = "int"
+default = 8
+min     = 0
+max     = 64
+doc     = "The screen row the ball bounces off instead of the top of the screen. Keeping it below the HUD stops the ball scribbling over the score."
+
+[knobs.map_band]
+type    = "int"
+default = 8
+min     = 1
+max     = 32
+doc     = "Levels laid side by side across the map before the next band starts, = 128 / grid_w. The map format puts levels 0..7 along the top and 8..9 on the second band."
+
+[knobs.level_count]
+type    = "int"
+default = 10
+min     = 1
+max     = 40
+doc     = "How many levels the pack holds. Clearing the last one wins the game rather than reading an eleventh header."
+
+
+# ============================================================================
+# The paddle
+# ============================================================================
+
+[knobs.paddle_y]
+type    = "int"
+default = 110
+min     = 0
+max     = 127
+doc     = "The screen row the paddle sits on. Everything between the bottom block and here is the reaction time the game gives you."
+
+[knobs.paddle_h]
+type    = "int"
+default = 3
+min     = 1
+max     = 16
+doc     = "The paddle's thickness in pixels, and the height of the side pads."
+
+[knobs.paddle_speed]
+type    = "fixed"
+default = 1.75
+min     = 0.1
+max     = 8.0
+doc     = "Pixels the paddle slides per frame. The single number that decides whether a level's ball speed is fair."
+
+[knobs.paddle_max_w]
+type    = "int"
+default = 48
+min     = 4
+max     = 128
+doc     = "The widest the `wide` drop may grow the paddle. The header's PADDLE_W is where it starts."
+
+[knobs.wide_grow]
+type    = "int"
+default = 10
+min     = 0
+max     = 64
+doc     = "Pixels one `wide` drop adds, up to paddle_max_w."
+
+[knobs.spread]
+type    = "fixed"
+default = 0.75
+min     = 0.0
+max     = 2.0
+doc     = "How much of the ball's speed a full-edge paddle hit puts into X. 0 makes the paddle a mirror and the game unplayable; above 1 makes every return nearly horizontal."
+
+[knobs.min_angle]
+type    = "fixed"
+default = 0.35
+min     = 0.05
+max     = 1.0
+doc     = "The smallest horizontal share a serve or a return may have, as a fraction of ball speed. Without a floor a dead-centre hit sends the ball straight up and it never comes back down anywhere interesting."
+
+
+# ============================================================================
+# The ball
+# ============================================================================
+
+[knobs.ball_size]
+type    = "int"
+default = 3
+min     = 1
+max     = 8
+doc     = "The ball is this many pixels square. Collision tests its four corners, so it must stay smaller than a block."
+
+[knobs.step_max]
+type    = "int"
+default = 3
+min     = 1
+max     = 8
+doc     = "The most pixels one collision substep may move the ball on either axis. THIS IS THE ANTI-TUNNELLING BOUND: keep it below both block_w and block_h and a ball can never cross a block without a substep landing inside it."
+
+[knobs.max_balls]
+type    = "int"
+default = 4
+min     = 1
+max     = 8
+doc     = "Balls in play at once, out of the pool the engine provides. The header's BALL_COUNT and the `multi` drop both fill it."
+
+[knobs.slow_scale]
+type    = "fixed"
+default = 0.6
+min     = 0.1
+max     = 1.0
+doc     = "Ball speed multiplier while the `slow` drop is running."
+
+
+# ============================================================================
+# The beam -- the safety net under the paddle, and ONLY for a red ball
+# ============================================================================
+
+[knobs.beam_y]
+type    = "int"
+default = 118
+min     = 0
+max     = 127
+doc     = "The screen row of the red beam. It must be BELOW paddle_y: the whole mechanic is that you move the paddle aside and let the beam take the red ball."
+
+[knobs.beam_h]
+type    = "int"
+default = 2
+min     = 1
+max     = 8
+doc     = "The beam's thickness. It deflects a RED ball and nothing else -- a normal ball falls straight through and is lost, which is what keeps the beam from being a floor."
+
+
+# ============================================================================
+# Drops
+# ============================================================================
+
+[knobs.max_drops]
+type    = "int"
+default = 6
+min     = 1
+max     = 16
+doc     = "Drops falling at once. A broken block that finds no free slot simply drops nothing."
+
+[knobs.drop_speed]
+type    = "fixed"
+default = 0.5
+min     = 0.05
+max     = 8.0
+doc     = "Pixels a drop falls per frame. Slow enough that chasing one is a real choice against catching the ball."
+
+[knobs.drop_w]
+type    = "int"
+default = 4
+min     = 1
+max     = 32
+doc     = "A drop's width in pixels, which is also the width it is caught within."
+
+[knobs.drop_h]
+type    = "int"
+default = 3
+min     = 1
+max     = 32
+doc     = "A drop's height in pixels."
+
+[knobs.power_frames]
+type    = "int"
+default = 240
+min     = 1
+max     = 255
+doc     = "How long `wide`, `slow` and `catch` last, in frames. One byte of RAM holds it, hence the 255."
+
+[knobs.gun_shots]
+type    = "int"
+default = 5
+min     = 1
+max     = 64
+doc     = "Shots one `gun` drop grants."
+
+
+# ============================================================================
+# Shooting, and the side pads that charge it
+# ============================================================================
+
+[knobs.max_shots]
+type    = "int"
+default = 4
+min     = 1
+max     = 16
+doc     = "Shots in the air at once."
+
+[knobs.shot_speed]
+type    = "int"
+default = 4
+min     = 1
+max     = 16
+doc     = "Pixels a shot rises per frame. Whole pixels: a shot has no subpixel life worth keeping."
+
+[knobs.shot_w]
+type    = "int"
+default = 2
+min     = 1
+max     = 16
+doc     = "A shot's width in pixels."
+
+[knobs.shot_h]
+type    = "int"
+default = 4
+min     = 1
+max     = 32
+doc     = "A shot's height in pixels."
+
+[knobs.pad_zone]
+type    = "int"
+default = 8
+min     = 1
+max     = 32
+doc     = "How far in from each screen edge the side charge pad reaches. Touching one with the paddle charges a shot, once per arrival -- parking on it does not mint ammunition."
+
+
+# ============================================================================
+# Drifting rows
+# ============================================================================
+
+[knobs.drift_range]
+type    = "int"
+default = 6
+min     = 0
+max     = 32
+doc     = "How far a drifting row slides from its home column before it turns, in pixels. The header's DRIFT_SPEED says how fast."
+
+
+# ============================================================================
+# The run
+# ============================================================================
+
+[knobs.lives]
+type    = "int"
+default = 3
+min     = 1
+max     = 99
+doc     = "Lives a run starts with. The `life` drop adds to them; a lost ball or a red ball on the paddle takes one."
+
+
+# ============================================================================
+# Art, and the animation that makes it read as a game rather than a diagram
+#
+# ONE knob names the art. The layout is a table in
+# modules/FORMATS-breakout-art.md and the engine adds a fixed offset to
+# `sprite_base` for every cell, so the engine holds one number and that document
+# holds the sheet. A knob per cell would let a recipe move one of them and leave
+# the other sixty-three where they were, which is a bug nothing could catch.
+#
+# With no spriteset in the recipe the sheet is empty, the engine sees that at
+# boot and draws filled rectangles instead, and every colour knob below still
+# means what it meant. There is nothing to set here for a cart that wants bars.
+# ============================================================================
+
+[knobs.sprite_base]
+type    = "int"
+indexes = "spriteset"
+default = 0
+min     = 0
+max     = 255
+doc     = "The sheet cell the art pack's first block sits at. Every other cell is this plus a fixed offset from the table in FORMATS-breakout-art.md, which the engine never gets to disagree with. Pair no spriteset and the engine draws rectangles instead."
+
+[knobs.max_fx]
+type    = "int"
+default = 8
+min     = 1
+max     = 16
+doc     = "Impact sparks, block breaks and shield flashes playing at once. An effect that finds no free slot simply does not play, the way a drop that finds none does not fall."
+
+[knobs.fx_frames]
+type    = "int"
+default = 4
+min     = 1
+max     = 5
+doc     = "Screen frames each frame of an effect holds, so a three-frame break lasts three times this and the paddle's destruction four. Capped at 5 because an effect's remaining life is packed into a nibble beside its kind."
+
+[knobs.red_flash]
+type    = "int"
+default = 2
+min     = 1
+max     = 32
+doc     = "Frames between the RED ball's two frames. Fast on purpose: the player has under a second to notice, and a still picture is not a warning."
+
+[knobs.beam_flow]
+type    = "int"
+default = 3
+min     = 1
+max     = 32
+doc     = "Frames between steps of the beam's scroll. Its two segments alternate along the row, so stepping them makes the beam read as live rather than painted."
+
+[knobs.drop_spin]
+type    = "int"
+default = 6
+min     = 1
+max     = 32
+doc     = "Frames between a falling drop's two frames. Slower than the ball's, because a tumbling drop should be readable while it falls rather than a blur."
+
+
+# ============================================================================
+# Which mechanic the header's MECHANIC byte turns on
+#
+# Each level keeps everything the levels before it introduced, so the engine
+# tests `MECHANIC >= knob`. These seven numbers are the mapping between the
+# level pack's curriculum and the engine's behaviour, and they are knobs so a
+# pack that wants drops from level one moves one number in a recipe.
+# ============================================================================
+
+[knobs.mech_red]
+type    = "int"
+default = 1
+min     = 0
+max     = 15
+doc     = "MECHANIC value from which breaking a type-4 block turns the ball RED. Below it a type-4 block is an ordinary one-hit block."
+
+[knobs.mech_drops]
+type    = "int"
+default = 2
+min     = 0
+max     = 15
+doc     = "MECHANIC value from which broken blocks drop power-ups at DROP_RATE/256."
+
+[knobs.mech_tough]
+type    = "int"
+default = 3
+min     = 0
+max     = 15
+doc     = "MECHANIC value from which type-2 and type-3 blocks take two and three hits. Below it they take one, so a pack can place them early as scenery."
+
+[knobs.mech_pads]
+type    = "int"
+default = 4
+min     = 0
+max     = 15
+doc     = "MECHANIC value from which the side charge pads exist, on levels whose header also sets SIDE_PADS."
+
+[knobs.mech_drift]
+type    = "int"
+default = 5
+min     = 0
+max     = 15
+doc     = "MECHANIC value from which rows holding a type-7 block slide sideways at DRIFT_SPEED."
+
+[knobs.mech_multi]
+type    = "int"
+default = 6
+min     = 0
+max     = 15
+doc     = "MECHANIC value from which the header's BALL_COUNT serves more than one ball."
+
+[knobs.mech_shield]
+type    = "int"
+default = 7
+min     = 0
+max     = 15
+doc     = "MECHANIC value from which a type-6 block ignores the ball and must be shot. Below it, it breaks like a plain block."
+
+
+# ============================================================================
+# Colour
+#
+# Every one of these is a LIVE PALETTE SLOT, 0..15 -- a number the framebuffer
+# stores, pointing at one of the console's 64 hardware colours through whatever
+# palette pack the recipe chose. None of them indexes a sheet cell, which is why
+# none of them carries `indexes`; see the header of this file.
+#
+# The defaults read against a `sweetie16`-shaped palette and are meant to be
+# overridden by any recipe that pairs a different one.
+# ============================================================================
+
+[knobs.bg_color]
+type    = "int"
+default = 1
+min     = 0
+max     = 15
+doc     = "The colour behind everything: the slot gfx.cls is given."
+
+[knobs.color_plain]
+type    = "int"
+default = 15
+min     = 0
+max     = 15
+doc     = "A type-1 block: one hit and it is gone."
+
+[knobs.color_tough]
+type    = "int"
+default = 8
+min     = 0
+max     = 15
+doc     = "A type-2 block, the two-hit one, still at full health."
+
+[knobs.color_hard]
+type    = "int"
+default = 10
+min     = 0
+max     = 15
+doc     = "A type-3 block, the three-hit one, still at full health. It must differ from color_tough: a player who cannot tell a two-hit block from a three-hit one cannot plan a route through a wall, and finds out only by spending a ball."
+
+[knobs.color_damaged]
+type    = "int"
+default = 7
+min     = 0
+max     = 15
+doc     = "A type-2 or type-3 block that has taken a hit. This is the whole of `shows damage after the first hit`, so give it something visibly darker."
+
+[knobs.color_red]
+type    = "int"
+default = 11
+min     = 0
+max     = 15
+doc     = "A type-4 block -- the one that turns the ball RED. It should be the most alarming colour the palette has, because it is the only warning the player gets."
+
+[knobs.color_solid]
+type    = "int"
+default = 4
+min     = 0
+max     = 15
+doc     = "A type-5 block: a wall inside the field that never breaks."
+
+[knobs.color_shield]
+type    = "int"
+default = 5
+min     = 0
+max     = 15
+doc     = "A type-6 block, which a ball bounces off and only a shot breaks."
+
+[knobs.color_drift]
+type    = "int"
+default = 14
+min     = 0
+max     = 15
+doc     = "A type-7 block. Its whole row slides with it, so it wants a colour that reads as a moving object."
+
+[knobs.color_prize]
+type    = "int"
+default = 13
+min     = 0
+max     = 15
+doc     = "A type-8 block, which always drops something."
+
+[knobs.paddle_color]
+type    = "int"
+default = 6
+min     = 0
+max     = 15
+doc     = "The paddle."
+
+[knobs.pad_color]
+type    = "int"
+default = 3
+min     = 0
+max     = 15
+doc     = "The side charge pads, drawn under the paddle's own row."
+
+[knobs.ball_color]
+type    = "int"
+default = 6
+min     = 0
+max     = 15
+doc     = "A NORMAL ball."
+
+[knobs.ball_red_color]
+type    = "int"
+default = 11
+min     = 0
+max     = 15
+doc     = "A RED ball. Pair it with color_red and beam_color so the three things the mechanic is made of read as one thing."
+
+[knobs.beam_color]
+type    = "int"
+default = 11
+min     = 0
+max     = 15
+doc     = "The beam under the paddle, drawn only while a ball is RED."
+
+[knobs.drop_color]
+type    = "int"
+default = 8
+min     = 0
+max     = 10
+doc     = "The FIRST of six consecutive live slots, one per drop kind in DROP_MASK's bit order: wide, slow, gun, multi, life, catch. Capped at 10 so the sixth stays inside the sixteen."
+
+[knobs.shot_color]
+type    = "int"
+default = 13
+min     = 0
+max     = 15
+doc     = "A shot in flight."
+
+[knobs.hud_color]
+type    = "int"
+default = 6
+min     = 0
+max     = 15
+doc     = "The level, lives and ammunition readout."
+
+[knobs.hud_y]
+type    = "int"
+default = 2
+min     = 0
+max     = 120
+doc     = "Screen row the readout is printed at. Keep it above ceiling_y and the ball never reaches it."
+
+
+# ============================================================================
+# Sound. With no soundbank these are silent, which is not an error.
+#
+# SEVENTEEN EVENTS, SEVENTEEN KNOBS, AND THE DEFAULTS ARE THE BANK'S OWN
+# NUMBERING. modules/FORMATS-breakout-art.md owns the effect table and
+# modules/redsound writes a bank against it, so every default below is the
+# effect number that document gives the event. A recipe pairing this engine with
+# `redsound` sets none of them and hears the right sound for every event; a
+# recipe pairing a different bank moves the numbers it needs to.
+#
+# The defaults were once a straight run 0..5, which lined up with nothing, and
+# `sfx_drop` therefore pointed at the WALL HIT. A default that is a plausible
+# number rather than the right number is worse than no default, because nothing
+# is wrong enough to notice.
+#
+# CHANNELS ARE THE ENGINE'S, NOT THE RECIPE'S, and engine.js fixes them because
+# which effect may interrupt which is a mechanic and not a preference:
+#
+#   0 and 1  the effects that fire many times a second -- the block hit, the
+#            break, the paddle return, the wall. The song claims 2 and 3 and
+#            leaves these two to the engine, because a song here would be
+#            shredded by a rally.
+#   2        drops, shots, shields and the side pads. It costs the song its
+#            lead voice until the pattern turns over, which is the right trade
+#            for a cue the player has to act on.
+#   3        THE IMPORTANT ONE. The alarm, the deflection, the paddle's
+#            destruction, a lost ball, the level clear and the game over all
+#            live here so that each cuts the one before it: the deflection
+#            interrupting the alarm mid-warble is the sound of relief landing
+#            on top of the sound of danger, and the game-over cue taking the
+#            channel from the life-lost cue a frame later is the right ending.
+# ============================================================================
+
+[knobs.sfx_hit]
+type    = "int"
+default = 0
+min     = 0
+max     = 63
+doc     = "Effect id for a block that was hit and survived. One of the three that fire constantly, so it wants the shortest and quietest thing in the bank."
+
+[knobs.sfx_break]
+type    = "int"
+default = 1
+min     = 0
+max     = 63
+doc     = "Effect id for a block breaking."
+
+[knobs.sfx_paddle]
+type    = "int"
+default = 2
+min     = 0
+max     = 63
+doc     = "Effect id for a normal ball returned by the paddle."
+
+[knobs.sfx_wall]
+type    = "int"
+default = 3
+min     = 0
+max     = 63
+doc     = "Effect id for the ball meeting a side wall or the ceiling. It fires more often than anything else in the game, which is why the bank makes it the quietest."
+
+[knobs.sfx_spawn]
+type    = "int"
+default = 4
+min     = 0
+max     = 63
+doc     = "Effect id for a drop appearing out of a broken block. It is the cue that says there is something to chase, and it fires where the block was, not where the paddle is."
+
+[knobs.sfx_drop]
+type    = "int"
+default = 5
+min     = 0
+max     = 63
+doc     = "Effect id for a caught drop, except the extra life, which has sfx_life."
+
+[knobs.sfx_life]
+type    = "int"
+default = 6
+min     = 0
+max     = 63
+doc     = "Effect id for catching the extra-life drop. It is the one drop that gives back what the game takes, so it does not share the generic catch."
+
+[knobs.sfx_shoot]
+type    = "int"
+default = 7
+min     = 0
+max     = 63
+doc     = "Effect id for firing."
+
+[knobs.sfx_ping]
+type    = "int"
+default = 8
+min     = 0
+max     = 63
+doc     = "Effect id for something striking a shielded block and failing to break it. The audio half of the shield flash, and the engine's way of saying `shoot this one`."
+
+[knobs.sfx_shield]
+type    = "int"
+default = 9
+min     = 0
+max     = 63
+doc     = "Effect id for a shielded block finally breaking. Distinct from sfx_break because it is the reward for the one block a ball cannot touch."
+
+[knobs.sfx_red]
+type    = "int"
+default = 10
+min     = 0
+max     = 63
+doc     = "Effect id for THE BALL TURNING RED. It is the only warning the player gets, they have about a second to act on it, and the bank builds it to resemble nothing else it holds. It plays on the channel the deflection uses, so the escape cuts the alarm off."
+
+[knobs.sfx_deflect]
+type    = "int"
+default = 11
+min     = 0
+max     = 63
+doc     = "Effect id for the beam catching the red ball. It shares a channel with sfx_red on purpose: the relief interrupts the alarm rather than playing beside it."
+
+[knobs.sfx_smash]
+type    = "int"
+default = 12
+min     = 0
+max     = 63
+doc     = "Effect id for a red ball destroying the paddle. The worst thing that can happen, and NOT the same event as a ball falling out of the world -- that is sfx_lose."
+
+[knobs.sfx_lose]
+type    = "int"
+default = 13
+min     = 0
+max     = 63
+doc     = "Effect id for a ball lost off the bottom of the screen. A merely dropped ball; the paddle being destroyed is sfx_smash."
+
+[knobs.sfx_clear]
+type    = "int"
+default = 14
+min     = 0
+max     = 63
+doc     = "Effect id for a level cleared, including the last one."
+
+[knobs.sfx_over]
+type    = "int"
+default = 15
+min     = 0
+max     = 63
+doc     = "Effect id for the last life going. It takes the channel from the loss cue that fired a frame earlier, which is why a player hears `life lost` on every life but the last."
+
+[knobs.sfx_charge]
+type    = "int"
+default = 16
+min     = 0
+max     = 63
+doc     = "Effect id for a side pad charging a shot. It fires once per arrival, the same as the ammunition does, so parking on a pad is silent."

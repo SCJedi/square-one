@@ -1,0 +1,109 @@
+# Deep Run
+#
+# THE SAME ENGINE AS `cave-runner`, WITH A DIFFERENT WORLD IN IT.
+#
+# Line for line this is `examples/cave-runner/recipe.toml` with one module
+# reference changed -- `caves` becomes `dungeon` -- a different set of tile
+# indices bound to the engine's tile_* knobs, and a [tuning] table that makes
+# the runner heavier and slower. `platformer@1.0.0` is byte-for-byte the engine
+# `cave-runner` uses; not one line of it was edited to build this.
+#
+#     sq1 stamp examples/deep-run      -> examples/deep-run.cart
+#
+# The two carts have different ids and different 600-frame proof chains, because
+# the art reaches the machine and the numbers reach the code. Their CODE chunks
+# differ ONLY in the `const KNOB = { ... }` line the stamper writes above the
+# engine's own source. That is what "art and code are separable" means when it
+# is a measurement rather than a claim.
+
+[cart]
+title   = "Deep Run"
+author  = "square one"
+payload = "script/js1"
+
+[modules]
+engine    = "platformer@1.0.0"
+palette   = "sweetie16@1.0.0"
+tileset   = "dungeon@1.0.0"
+spriteset = "hero@1.0.0"
+
+
+[tuning]
+
+# --- the dungeon -----------------------------------------------------------
+# A different seed, so this is a different level rather than the cave with new
+# wallpaper. The level is still a pure function of the number.
+level_seed  = 20260213
+
+map_width   = 120
+map_height  = 36
+ground_row  = 26
+ground_vary = 4
+ceiling_rows = 3
+
+# Tighter and meaner than the cave: more holes, more spikes, fewer ledges to
+# take them on, and the ledges that are there sit one row lower so the heavier
+# jump below can still reach them.
+pit_chance      = 28
+spike_chance    = 34
+platform_chance = 38
+platform_height = 3
+crawler_chance  = 26
+gem_chance      = 45
+
+start_tile_x = 3
+start_tile_y = 22   # four tiles above the floor, so the game opens on a landing
+
+# --- feel ------------------------------------------------------------------
+# HEAVY. The cave runs; this one trudges. Gravity is up half again on the
+# engine's default, the jump is stronger to pay for it but cuts short the
+# moment A is released, acceleration is down and friction bites -- so a mistake
+# here is a mistake you commit to rather than one you steer out of.
+gravity           = 0.62
+max_fall_speed    = 6.5
+jump_velocity     = -3.9
+jump_cut          = 0.35
+run_accel         = 0.34
+air_accel         = 0.18
+max_run_speed     = 1.45
+ground_friction   = 0.5
+air_friction      = 0.9
+
+# Four frames of coyote time instead of the cave's eight. The pits are narrower
+# and the game is asking for deliberate jumps, not saved ones.
+coyote_frames      = 4
+jump_buffer_frames = 4
+
+# --- which tile is which ---------------------------------------------------
+# The engine knows nothing about the dungeon pack; these lines are the entire
+# binding between them. The numbers come from the [names] table in
+# modules/dungeon/module.toml -- the same knobs `cave-runner` binds to the
+# [names] table in modules/caves/module.toml.
+tile_rock       = 1    # brick
+tile_rock_top   = 3    # brick_top, the dressed capstone course
+tile_ceiling    = 8    # brick_bottom, the roof seen from underneath
+tile_dirt       = 13   # flagstone
+tile_lava       = 27   # water_top -- flooded, not molten, and just as fatal
+tile_spike      = 23   # spikes_up, iron
+tile_platform   = 20   # slab_mid
+tile_platform_l = 19   # slab_left
+tile_platform_r = 21   # slab_right
+tile_bg         = 47   # bg_wall, so the back of the room is masonry
+
+# --- which sprite is which -------------------------------------------------
+# Unchanged from `cave-runner`: the same `hero` pack, at the same base, so the
+# same indices mean the same frames. A spriteset swap would be a second one of
+# these, and this recipe is about the tileset.
+sprite_idle    = 64
+sprite_run     = 66
+sprite_jump    = 70
+sprite_fall    = 71
+sprite_hurt    = 72
+sprite_crawler = 73
+sprite_gem     = 75
+
+# --- presentation ----------------------------------------------------------
+bg_color         = 2     # sweetie16 slot 2: dark navy, the cold behind the wall
+hud_color        = 6
+camera_smooth    = 0.22
+camera_lookahead = 10

@@ -1,0 +1,90 @@
+# `redsound` -- everything Red Breaker makes a noise with.
+#
+# A `soundbank` module: no code, no art, no levels. Two files, both of them the
+# bytes `packages/runtime/src/audio.ts` documents, and both of them OUTPUT.
+#
+# HOW TO CHANGE IT
+# ----------------
+# Edit the tracker text in gen.mjs -- one line per step, note, volume, waveform,
+# effect -- and regenerate:
+#
+#     node modules/redsound/gen.mjs
+#
+# sfx.bin and music.bin are never edited by hand. A .bin cannot be reviewed, and
+# a note changed there and not in gen.mjs is lost the next time anyone
+# regenerates. gen.mjs CHECKS the bank before it writes anything: see the list
+# below.
+#
+# THE TWO FILES
+# -------------
+#     sfx.bin    3328 bytes, the whole `SFX ` region at 0x6300: 32 slots of 104
+#                bytes, an 8-byte header and 32 steps of NOTE/MIX/FX each.
+#                Effects 0..16 are the game; 17..28 are the twelve voices the
+#                music patterns are made of; 29..31 are zero, which is silence.
+#     music.bin  48 bytes, the first six patterns of the `MUS ` region at
+#                0x7000: three level bands of two bars each, every band a loop.
+#                Patterns 6..254 stay zero and no band ever reaches them.
+#
+# WHAT gen.mjs REFUSES TO WRITE
+# -----------------------------
+# Each of these is a rule from modules/FORMATS-breakout-art.md that a later edit
+# would otherwise break quietly, so it is a build failure instead:
+#
+#   * a step whose note, volume, waveform or effect field will not parse
+#   * an effect with no steps, more than 32, or a speed outside 1..255
+#   * two voices in one pattern with different total lengths -- a pattern ends
+#     when every channel it claimed is done, so a short voice does not truncate,
+#     it leaves the bar dragging
+#   * the SAW waveform anywhere but effect 10
+#   * volume 15 anywhere but effect 10, or effect 10 dipping below volume 12
+#   * effect 10 reaching down to A5 or below, into the music's register
+#   * a music voice above A5, louder than 4/15, or using saw or noise
+#
+# WHICH ENGINE KNOB POINTS AT WHICH EFFECT
+# ----------------------------------------
+# The numbering here is the one modules/FORMATS-breakout-art.md fixes, and the
+# format owns it. `breakout@1.0.0`'s six knobs default to 0..5, which is a
+# straight run rather than that table, so THREE OF THE SIX MUST BE SET by any
+# recipe pairing these two modules:
+#
+#     sfx_hit    = 0     block hit and survived         -- default is right
+#     sfx_break  = 1     block breaks                   -- default is right
+#     sfx_paddle = 2     ball returned by the paddle    -- default is right
+#     sfx_drop   = 5     drop caught          (default 3 is the WALL hit)
+#     sfx_shoot  = 7     shot fired           (default 4 is the drop appearing)
+#     sfx_lose   = 13    ball out of play     (default 5 is the drop caught)
+#
+# TEN OF THE SEVENTEEN EFFECTS HAVE NO KNOB TO POINT AT THEM, including the
+# alarm, which is the most important sound in the game. `breakout@1.0.0` calls
+# `snd.sfx` from seven places and none of them is the ball turning red, the beam
+# deflecting it, a wall bounce, a level clearing or a game ending. That is the
+# honest state of the engine and it is not this module's file to fix; README.md
+# names the knobs and call sites it would need.
+
+[module]
+kind    = "soundbank"
+name    = "redsound"
+version = "1.0.0"
+
+[provides]
+# The effects Red Breaker's design calls for, 0..16, all present.
+effects  = 17
+# The music voices those patterns are built from, 17..28.
+voices   = 12
+# Six patterns: three level bands of two bars, each band a self-contained loop
+# started with music(0), music(2) or music(4).
+patterns = 6
+bands    = 3
+# The channels the song claims. Channel 2 takes the lead and channel 3 the bass,
+# because the engine fires its two constant effects on channels 0 and 1 many
+# times a second and a song there would be shredded. Pass this as the `mask`
+# argument to `snd.music`.
+music_mask = 12
+
+# No [requires]. A soundbank needs a machine and nothing else: no palette, since
+# it draws nothing, and no engine, since any cart that calls `snd.sfx` can play
+# it.
+
+[files]
+sfx = "sfx.bin"
+mus = "music.bin"

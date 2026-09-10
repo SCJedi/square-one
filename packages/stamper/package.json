@@ -1,0 +1,19 @@
+{
+  "name": "@sq1/stamper",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Recipe in, cart out. Resolve, merge, bind, validate, compile, pack, prove. Build tool - never ships to a player.",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@sq1/cart": "*",
+    "@sq1/core": "*",
+    "@sq1/runtime": "*"
+  },
+  "scripts": {
+    "test": "vitest run"
+  }
+}

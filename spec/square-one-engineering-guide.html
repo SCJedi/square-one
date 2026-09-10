@@ -1,0 +1,840 @@
+<title>Square One Engineering Guide</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+<style>
+:root{
+  --bg:#f6f5fa;
+  --surface:#ffffff;
+  --surface-2:#edebf4;
+  --text:#1c1a2b;
+  --text-2:#4d4763;
+  --text-3:#6f6889;
+  --rule:#dedaea;
+  --rule-strong:#bab4ce;
+  --accent:#2c5f8a;
+  --accent-2:#7f2b4a;
+  --accent-soft:#e3edf6;
+  --code-bg:#f0eef7;
+
+  --amend:#d9455a;   --amend-soft:#fbe9eb;
+  --gotcha:#c07a1c;  --gotcha-soft:#fbf1de;
+  --decide:#3f8455;  --decide-soft:#e6f2ea;
+
+  --pk-core:#7f2b4a; --pk-cart:#2c5f8a; --pk-run:#b8901c;
+  --pk-play:#3f8455; --pk-stamp:#8a5cc4; --pk-cli:#6f6889;
+
+  --step-0:1.0625rem;
+  --measure:76ch;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0d0b12; --surface:#15131f; --surface-2:#1d1a2c;
+    --text:#e8e6f0; --text-2:#b6b0c9; --text-3:#8b849f;
+    --rule:#2a2740; --rule-strong:#413b5c;
+    --accent:#7fb9e2; --accent-2:#d98aa5; --accent-soft:#182735;
+    --code-bg:#1a1827;
+    --amend:#e8697c;  --amend-soft:#2a1820;
+    --gotcha:#e0ab3f; --gotcha-soft:#2a2214;
+    --decide:#6ec27a; --decide-soft:#16261b;
+    --pk-core:#d98aa5; --pk-cart:#7fb9e2; --pk-run:#e0ab3f;
+    --pk-play:#6ec27a; --pk-stamp:#b18ce0; --pk-cli:#8b849f;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0d0b12; --surface:#15131f; --surface-2:#1d1a2c;
+  --text:#e8e6f0; --text-2:#b6b0c9; --text-3:#8b849f;
+  --rule:#2a2740; --rule-strong:#413b5c;
+  --accent:#7fb9e2; --accent-2:#d98aa5; --accent-soft:#182735;
+  --code-bg:#1a1827;
+  --amend:#e8697c;  --amend-soft:#2a1820;
+  --gotcha:#e0ab3f; --gotcha-soft:#2a2214;
+  --decide:#6ec27a; --decide-soft:#16261b;
+  --pk-core:#d98aa5; --pk-cart:#7fb9e2; --pk-run:#e0ab3f;
+  --pk-play:#6ec27a; --pk-stamp:#b18ce0; --pk-cli:#8b849f;
+}
+
+*{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;}
+body{
+  margin:0; background:var(--bg); color:var(--text);
+  font-family:"Source Serif 4","Iowan Old Style",Georgia,serif;
+  font-size:var(--step-0); line-height:1.66; font-optical-sizing:auto;
+}
+::selection{background:var(--accent-soft);}
+
+.wrap{
+  max-width:1200px; margin:0 auto;
+  padding:0 clamp(1rem,4vw,2.5rem);
+  display:grid; grid-template-columns:15rem minmax(0,1fr);
+  gap:clamp(1.5rem,4vw,3.5rem); align-items:start;
+}
+@media (max-width:960px){ .wrap{grid-template-columns:minmax(0,1fr);} }
+
+.masthead{
+  grid-column:1 / -1;
+  border-bottom:2px solid var(--text);
+  padding:clamp(2.5rem,7vw,4rem) 0 1.5rem;
+  margin-bottom:2.5rem;
+}
+.eyebrow{
+  font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  font-size:.7rem; font-weight:500; letter-spacing:.16em; text-transform:uppercase;
+  color:var(--text-3); display:flex; flex-wrap:wrap; gap:.4rem 1.1rem; margin:0 0 1.1rem;
+}
+h1{
+  font-family:Archivo,"Helvetica Neue",Arial,sans-serif;
+  font-weight:700; font-size:clamp(2.2rem,5.6vw,3.4rem);
+  line-height:1; letter-spacing:-.028em; margin:0 0 .6rem; text-wrap:balance;
+}
+h1 .sub{
+  display:block; font-size:clamp(.95rem,2.2vw,1.3rem); font-weight:500;
+  letter-spacing:-.01em; color:var(--text-3); margin-top:.55rem;
+}
+.deck{font-size:1.12rem;color:var(--text-2);max-width:var(--measure);margin:1.2rem 0 0;}
+.status{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:1.5rem;}
+.chip{
+  font-family:"IBM Plex Mono",monospace; font-size:.68rem; font-weight:500;
+  letter-spacing:.09em; text-transform:uppercase; padding:.3rem .6rem;
+  border:1px solid var(--rule-strong); border-radius:2px;
+  color:var(--text-2); background:var(--surface);
+}
+.chip.hot{border-color:var(--amend);color:var(--amend);}
+
+.toc{
+  position:sticky; top:1.5rem;
+  font-family:Archivo,Arial,sans-serif; font-size:.84rem; line-height:1.45;
+  max-height:calc(100vh - 3rem); overflow-y:auto;
+}
+@media (max-width:960px){
+  .toc{position:static;max-height:none;border:1px solid var(--rule);
+       background:var(--surface);padding:1.1rem 1.25rem;margin-bottom:2.5rem;}
+}
+.toc h2{
+  font-size:.68rem; letter-spacing:.16em; text-transform:uppercase;
+  color:var(--text-3); font-weight:600; margin:0 0 .8rem;
+  font-family:"IBM Plex Mono",monospace;
+}
+.toc ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.28rem;}
+.toc a{
+  color:var(--text-2); text-decoration:none; display:grid;
+  grid-template-columns:1.6rem 1fr; gap:.4rem; padding:.15rem .3rem .15rem 0; border-radius:2px;
+}
+.toc a .n{font-family:"IBM Plex Mono",monospace;font-size:.72rem;color:var(--text-3);font-variant-numeric:tabular-nums;}
+.toc a:hover, .toc a:hover .n{color:var(--accent);}
+
+main{min-width:0;}
+section{margin:0 0 3.25rem;scroll-margin-top:1.5rem;}
+p{margin:0 0 1.05rem;max-width:var(--measure);}
+main > section > h2{
+  font-family:Archivo,Arial,sans-serif; font-size:clamp(1.45rem,2.9vw,1.95rem);
+  font-weight:700; letter-spacing:-.02em; line-height:1.12;
+  margin:0 0 .9rem; padding-bottom:.5rem; border-bottom:1px solid var(--rule-strong);
+  text-wrap:balance;
+}
+h3{
+  font-family:Archivo,Arial,sans-serif; font-size:1.02rem; font-weight:600;
+  letter-spacing:-.005em; margin:2.1rem 0 .5rem;
+  display:flex; gap:.7rem; align-items:baseline; text-wrap:balance;
+}
+h3 .cn{
+  font-family:"IBM Plex Mono",monospace; font-size:.78rem; font-weight:500;
+  color:var(--accent); font-variant-numeric:tabular-nums; flex:none;
+}
+h4{
+  font-family:Archivo,Arial,sans-serif; font-size:.75rem; font-weight:600;
+  letter-spacing:.11em; text-transform:uppercase; color:var(--text-3); margin:1.7rem 0 .55rem;
+}
+.lede{font-size:1.06rem;color:var(--text-2);max-width:var(--measure);}
+
+a{color:var(--accent);text-underline-offset:.16em;}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+
+code,kbd{
+  font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:.855em; background:var(--code-bg); padding:.1em .34em; border-radius:2px;
+}
+pre{
+  font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:.785rem; line-height:1.58; background:var(--surface);
+  border:1px solid var(--rule); padding:1.05rem 1.15rem;
+  overflow-x:auto; margin:1.1rem 0; color:var(--text-2);
+}
+pre code{background:none;padding:0;font-size:1em;}
+pre b{color:var(--text);font-weight:600;}
+pre i{color:var(--text-3);font-style:normal;}
+
+.kw{font-family:"IBM Plex Mono",monospace;font-size:.82em;font-weight:600;
+    letter-spacing:.06em;color:var(--accent-2);background:none;padding:0;}
+
+/* three kinds of callout - the distinction carries meaning */
+.note{
+  border-left:3px solid var(--nc,var(--accent));
+  background:var(--nb,var(--accent-soft));
+  padding:.85rem 1.1rem .9rem; margin:1rem 0 1.4rem;
+  max-width:var(--measure); font-size:.97rem; color:var(--text-2);
+}
+.note > .lbl{
+  display:block; font-family:"IBM Plex Mono",monospace; font-size:.63rem;
+  font-weight:600; letter-spacing:.18em; text-transform:uppercase;
+  color:var(--nc,var(--accent)); margin-bottom:.35rem;
+}
+.note p{margin:0 0 .6rem;} .note p:last-child{margin:0;}
+.note pre{margin:.7rem 0 .3rem;background:var(--bg);}
+.amend{--nc:var(--amend);--nb:var(--amend-soft);}
+.gotcha{--nc:var(--gotcha);--nb:var(--gotcha-soft);}
+.decide{--nc:var(--decide);--nb:var(--decide-soft);}
+
+table{border-collapse:collapse;width:100%;font-size:.86rem;
+      font-variant-numeric:tabular-nums;margin:.4rem 0 1.4rem;}
+.scroll{overflow-x:auto;margin:1.2rem 0;border-bottom:1px solid var(--rule);}
+.scroll table{margin:0;min-width:34rem;}
+th,td{text-align:left;padding:.5rem .8rem .5rem 0;border-bottom:1px solid var(--rule);vertical-align:top;}
+th{font-family:Archivo,Arial,sans-serif;font-size:.67rem;font-weight:600;letter-spacing:.11em;
+   text-transform:uppercase;color:var(--text-3);border-bottom:1px solid var(--rule-strong);white-space:nowrap;}
+td code{font-size:.9em;}
+.mono td:first-child{font-family:"IBM Plex Mono",monospace;font-size:.9em;white-space:nowrap;}
+tbody tr:last-child td{border-bottom:none;}
+
+ul,ol.list{max-width:var(--measure);padding-left:1.15rem;margin:0 0 1.1rem;}
+li{margin-bottom:.4rem;}
+
+.pkg{display:inline-block;width:.55rem;height:.55rem;border-radius:1px;margin-right:.45rem;}
+
+.ms{
+  border:1px solid var(--rule); background:var(--surface);
+  padding:1rem 1.15rem; margin-bottom:.9rem; max-width:var(--measure);
+}
+.ms > .h{
+  display:flex;gap:.7rem;align-items:baseline;margin-bottom:.4rem;
+  font-family:Archivo,Arial,sans-serif;font-weight:600;font-size:1rem;
+}
+.ms > .h .id{
+  font-family:"IBM Plex Mono",monospace;font-size:.72rem;font-weight:600;
+  letter-spacing:.1em;color:var(--accent);flex:none;
+}
+.ms .acc{
+  font-size:.9rem;color:var(--text-2);margin:.5rem 0 0;
+  padding-top:.5rem;border-top:1px dashed var(--rule-strong);
+}
+.ms .acc b{
+  font-family:"IBM Plex Mono",monospace;font-size:.63rem;font-weight:600;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--decide);
+  display:block;margin-bottom:.2rem;
+}
+
+footer{
+  grid-column:1 / -1;border-top:2px solid var(--text);margin-top:2rem;
+  padding:1.5rem 0 4rem;font-family:"IBM Plex Mono",monospace;font-size:.72rem;
+  color:var(--text-3);display:flex;flex-wrap:wrap;gap:.5rem 1.5rem;justify-content:space-between;
+}
+@media (prefers-reduced-motion:reduce){*{animation:none !important;transition:none !important;}}
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow"><span>Implementation Guide</span><span>Companion to the Console Specification</span><span>Draft 1</span></p>
+    <h1>Square One Engineering Guide<span class="sub">Packages, protocols, algorithms, and what you build in what order</span></h1>
+    <p class="deck">The specification says what the machine is. This says how to build it: the thread topology, the exact arithmetic, the sandbox bootstrap order, the test strategy, and seven milestones with binary acceptance criteria. It also carries three amendments to Tier A that the engineering pass turned up &mdash; those come first, because Tier A is not frozen yet and this is the last moment they are free.</p>
+    <div class="status">
+      <span class="chip hot">3 Tier A amendments</span>
+      <span class="chip">6 packages</span>
+      <span class="chip">7 milestones</span>
+      <span class="chip">Stack: TypeScript, no runtime deps</span>
+    </div>
+  </header>
+
+  <aside class="toc">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#amend"><span class="n">1</span><span>Amendments to Tier A</span></a></li>
+      <li><a href="#repo"><span class="n">2</span><span>Repository and packages</span></a></li>
+      <li><a href="#topology"><span class="n">3</span><span>Thread topology</span></a></li>
+      <li><a href="#protocol"><span class="n">4</span><span>Host&ndash;worker protocol</span></a></li>
+      <li><a href="#math"><span class="n">5</span><span>Exact arithmetic</span></a></li>
+      <li><a href="#raster"><span class="n">6</span><span>The rasterizer</span></a></li>
+      <li><a href="#audio"><span class="n">7</span><span>Audio</span></a></li>
+      <li><a href="#sandbox"><span class="n">8</span><span>The sandbox</span></a></li>
+      <li><a href="#container"><span class="n">9</span><span>Container codec</span></a></li>
+      <li><a href="#tokens"><span class="n">10</span><span>The tokenizer</span></a></li>
+      <li><a href="#stamper"><span class="n">11</span><span>The stamper</span></a></li>
+      <li><a href="#test"><span class="n">12</span><span>Test strategy</span></a></li>
+      <li><a href="#perf"><span class="n">13</span><span>Performance budget</span></a></li>
+      <li><a href="#milestones"><span class="n">14</span><span>Milestones</span></a></li>
+      <li><a href="#week1"><span class="n">15</span><span>The first week</span></a></li>
+    </ol>
+  </aside>
+
+  <main>
+
+    <!-- 1 -->
+    <section id="amend">
+      <h2>1. Amendments to Tier A</h2>
+      <p class="lede">Writing the implementation found three places where the specification as drafted is either impossible to implement exactly in JavaScript or expensive for no benefit. Tier A is the one tier that can never change after ship, so these are proposed now.</p>
+
+      <div class="note amend">
+        <span class="lbl">Amendment 1 &mdash; replace PCG32 with xoshiro128**</span>
+        <p>PCG32 has 64-bit state and a 64-bit multiply. JavaScript has neither natively. Implementing it means <code>BigInt</code> (roughly 50x slower, and it allocates &mdash; unacceptable in a per-frame path) or hand-rolled 64-bit multiplication in 32-bit halves, which is a correctness hazard in the single most determinism-critical function in the machine.</p>
+        <p><b>xoshiro128** uses four 32-bit words and nothing but 32-bit operations.</b> Statistically equivalent for game use, several times faster, and it needs no tricks. Best of all it is <em>free</em>: the state is 4 x u32 = 16 bytes, exactly the size already reserved at <code>0x2100</code>. No memory-map change.</p>
+<pre><code>function rotl(x, k) { return ((x &lt;&lt; k) | (x &gt;&gt;&gt; (32 - k))) &gt;&gt;&gt; 0; }
+
+function next(s) {                         <i>// s: Uint32Array(4)</i>
+  const r = Math.imul(rotl(Math.imul(s[1], 5) &gt;&gt;&gt; 0, 7), 9) &gt;&gt;&gt; 0;
+  const t = (s[1] &lt;&lt; 9) &gt;&gt;&gt; 0;
+  s[2] ^= s[0]; s[3] ^= s[1]; s[1] ^= s[2]; s[0] ^= s[3]; s[2] ^= t;
+  s[3] = rotl(s[3], 11);
+  return r;                                <i>// u32</i>
+}</code></pre>
+      </div>
+
+      <div class="note amend">
+        <span class="lbl">Amendment 2 &mdash; rounding is floor, not truncation toward zero</span>
+        <p>The draft says fixed-point multiply and divide truncate toward zero. Every fast fixed-point implementation uses an arithmetic shift right, which is <em>floor</em>. They differ for negative results, and truncate-toward-zero costs a sign test and a correction on every multiply in the machine.</p>
+        <p><b>Specify floor.</b> It is what the hardware does, what the exact algorithm in section 5 naturally produces, and it is consistent: <code>floor</code> has no discontinuity at zero, so a sprite drifting left across the origin moves smoothly rather than pausing for one sub-pixel.</p>
+      </div>
+
+      <div class="note amend">
+        <span class="lbl">Amendment 3 &mdash; bound the domain of <code>rnd(n)</code></span>
+        <p>The draft defines <code>rnd(n) = (u64(rand32()) * u64(n)) &gt;&gt; 32</code>. In JavaScript that product reaches 2<sup>63</sup>, far past the 2<sup>53</sup> where doubles are still exact integers &mdash; so the naive transcription is silently wrong for large <code>n</code>, and wrong differently on different engines.</p>
+        <p>Bound <code>n</code> to <code>[1, 2^31)</code> and specify the split algorithm in section 5.3, whose every intermediate stays below 2<sup>48</sup>. Out-of-range <code>n</code> is a build-time error, not a runtime surprise.</p>
+      </div>
+
+      <p>Everything else in Tier A survived implementation review unchanged.</p>
+    </section>
+
+    <!-- 2 -->
+    <section id="repo">
+      <h2>2. Repository and packages</h2>
+      <p>A pnpm workspace. TypeScript throughout, compiled to ES2022. <strong>Zero runtime dependencies</strong> in every package that ships to a player &mdash; the runtime must stay under 100 KB gzipped and must never inherit somebody else's determinism bug.</p>
+
+<pre><code>square-one/
+  packages/
+    <b>core/</b>        fixed point, PRNG, sin table, tokenizer, shared types
+    <b>cart/</b>        container encode/decode, chunk walk, cart id, png stego
+    <b>runtime/</b>     worker: cart host, rasterizer, synth, memory map
+    <b>player/</b>      main thread: shell, canvas, input, audio graph, iframe embed
+    <b>stamper/</b>     resolve, merge, bind, validate, compile, pack
+    <b>cli/</b>         sq1 build | run | validate | hash | prove | new
+  modules/         engines, palettes, tilesets, soundbanks   (Tier E/F content)
+  conformance/     test carts, replays, hash chains, fixtures
+  spec/            the specification and this guide</code></pre>
+
+      <h4>Dependency direction &mdash; enforced by lint, not convention</h4>
+      <div class="scroll">
+        <table class="mono">
+          <thead><tr><th>Package</th><th>May import</th><th>Ships to player</th></tr></thead>
+          <tbody>
+            <tr><td><span class="pkg" style="background:var(--pk-core)"></span>core</td><td>nothing</td><td>yes</td></tr>
+            <tr><td><span class="pkg" style="background:var(--pk-cart)"></span>cart</td><td>core</td><td>yes</td></tr>
+            <tr><td><span class="pkg" style="background:var(--pk-run)"></span>runtime</td><td>core, cart</td><td>yes</td></tr>
+            <tr><td><span class="pkg" style="background:var(--pk-play)"></span>player</td><td>core, cart, runtime</td><td>yes</td></tr>
+            <tr><td><span class="pkg" style="background:var(--pk-stamp)"></span>stamper</td><td>core, cart</td><td><strong>no</strong> &mdash; build tool</td></tr>
+            <tr><td><span class="pkg" style="background:var(--pk-cli)"></span>cli</td><td>everything</td><td>no</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note decide">
+        <span class="lbl">Decision &mdash; the stamper never ships to a player</span>
+        <p>Keeping the build tool out of the runtime is what holds the runtime small and what keeps the trust boundary simple: a player parses and executes carts, and does nothing else. It also means the stamper is free to use whatever dependencies it likes.</p>
+      </div>
+    </section>
+
+    <!-- 3 -->
+    <section id="topology">
+      <h2>3. Thread topology</h2>
+
+<pre><code>  +----------------------------- host page ------------------------------+
+  |                                                                      |
+  |  &lt;iframe src="https://cart.sq1.run/player"                           |
+  |          sandbox="allow-scripts"&gt;      <i>no allow-same-origin</i>          |
+  |    +--------------------- MAIN THREAD ---------------------+         |
+  |    |  shell (bezel, touch pad, pause)                      |         |
+  |    |  input capture -&gt; 4 bytes                             |         |
+  |    |  rAF + accumulator  <b>owns the clock</b>                    |         |
+  |    |  canvas: putImageData / texSubImage2D                 |         |
+  |    |  AudioContext + AudioWorkletNode                      |         |
+  |    +---------------^---------------------------|----------+         |
+  |                    | FRAME {rgba, audio}       | STEP {frame, input} |
+  |    +---------------|---------------------------v----------+         |
+  |    |                      WORKER                           |         |
+  |    |  64 KB ArrayBuffer  = the entire machine              |         |
+  |    |  scrubbed realm + cart closure                        |         |
+  |    |  rasterizer (writes packed nibbles into RAM)          |         |
+  |    |  palette expand -&gt; RGBA out buffer (transferred)      |         |
+  |    +-------------------------------------------------------+         |
+  +----------------------------------------------------------------------+</code></pre>
+
+      <div class="note decide">
+        <span class="lbl">Decision &mdash; the rasterizer lives with the cart, in the worker</span>
+        <p>A cart makes hundreds of draw calls per frame. If the rasterizer sat on the main thread, every <code>gfx.spr</code> would be a <code>postMessage</code> and the design would be dead on arrival. The worker owns the 64 KB and draws into it directly; only the finished frame crosses the boundary.</p>
+      </div>
+
+      <div class="note decide">
+        <span class="lbl">Decision &mdash; transferables, not SharedArrayBuffer</span>
+        <p><code>SharedArrayBuffer</code> requires cross-origin isolation (COOP + COEP), which is awkward to combine with a sandboxed iframe holding an opaque origin, and fails silently in configurations you will not notice until a user reports it.</p>
+        <p>Instead, <strong>ping-pong two 64 KB RGBA buffers</strong> as transferables. Transfer is a pointer move, not a copy. Sixty transfers per second of a 64 KB buffer is free. Revisit SAB only if profiling ever says to.</p>
+      </div>
+
+      <div class="note decide">
+        <span class="lbl">Decision &mdash; the main thread owns the clock</span>
+        <p>The worker must never decide when to step, because worker scheduling is at the mercy of the browser and the simulation rate is normative. Main runs <code>rAF</code>, accumulates real time, and emits exactly one <code>STEP</code> per 1/60 s of simulated time, clamped to five per presented frame. The worker is a pure function of the messages it receives &mdash; which is also what makes the headless prover in <code>cli</code> able to reuse it unchanged.</p>
+      </div>
+
+      <h3><span class="cn">3.1</span> Frame timeline</h3>
+<pre><code>  rAF(t)
+    dt = min(t - last, 100ms)            <i>clamp: backgrounded tab</i>
+    acc += dt
+    steps = 0
+    while (acc &gt;= 16.667 &amp;&amp; steps &lt; 5) {
+      post STEP{frame++, input}          <i>input sampled ONCE, before the step</i>
+      acc -= 16.667; steps++
+    }
+    present(latestFrameBuffer)           <i>may be one frame behind; documented</i></code></pre>
+      <p>Display latency is one frame by construction. Input latency is not affected, because input is sampled on the main thread at the moment the <code>STEP</code> is posted.</p>
+    </section>
+
+    <!-- 4 -->
+    <section id="protocol">
+      <h2>4. Host&ndash;worker protocol</h2>
+      <p>Six message types. Everything is structured-cloneable; the two buffers are transferred.</p>
+
+<pre><code><i>// main -&gt; worker</i>
+type ToWorker =
+  | { t: 'load';     cart: ArrayBuffer; seed: number }
+  | { t: 'step';     frame: number; input: Uint8Array <i>/* 4 */</i>; out: ArrayBuffer }
+  | { t: 'snapshot' }
+  | { t: 'restore';  ram: ArrayBuffer }
+
+<i>// worker -&gt; main</i>
+type FromWorker =
+  | { t: 'ready';    abiMinor: number; title: string }
+  | { t: 'frame';    frame: number; out: ArrayBuffer;
+                     audio: Int32Array; tookMs: number }
+  | { t: 'snapshot'; ram: ArrayBuffer }
+  | { t: 'fault';    phase: 'load'|'boot'|'tick'; frame?: number; message: string }</code></pre>
+
+      <div class="note gotcha">
+        <span class="lbl">Gotcha &mdash; a transferred buffer is gone</span>
+        <p>After <code>postMessage(msg, [out])</code> the sender's view is detached and every read returns zero. Keep exactly two buffers and treat them as a strict alternation: main sends <code>A</code> and holds <code>B</code>; the worker returns <code>A</code>; main presents <code>A</code> and sends <code>B</code>. A dropped or duplicated message desynchronizes the pair, so assert on <code>frame</code> parity in development builds.</p>
+      </div>
+
+      <h3><span class="cn">4.1</span> Faults</h3>
+      <p>A cart that throws produces a <code>fault</code>, not a dead tab. The player shows the phase, the frame index, and the message, and offers to rewind to the last snapshot. A <code>tick</code> that exceeds the watchdog produces a <code>fault</code> with <code>message: 'deadline'</code> after the worker is terminated and a fresh one is spun up from the last snapshot.</p>
+    </section>
+
+    <!-- 5 -->
+    <section id="math">
+      <h2>5. Exact arithmetic</h2>
+      <p class="lede">This is the most correctness-critical code in the project. If it is wrong, every replay in the archive is wrong, and the failure appears thousands of frames after the mistake.</p>
+
+      <h3><span class="cn">5.1</span> Fixed-point multiply</h3>
+      <p>The naive <code>(a * b) &gt;&gt; 16</code> is wrong in JavaScript, and it is worth being precise about why, because the obvious explanation is not the real one. Split the operands into 16-bit halves so no intermediate exceeds 2<sup>47</sup>.</p>
+
+<pre><code>const MIN = -2147483648, MAX = 2147483647;
+const sat = (r) =&gt; r &lt; MIN ? MIN : r &gt; MAX ? MAX : r | 0;
+
+<i>// a, b are i32 holding 16.16.  Result is floor((a*b) / 65536), saturated.</i>
+export function fmul(a, b) {
+  const ah = a &gt;&gt; 16, al = a &amp; 0xffff;    <i>// ah signed, al unsigned</i>
+  const bh = b &gt;&gt; 16, bl = b &amp; 0xffff;
+  const hi  = ah * bh;                    <i>// &lt;= 2^30</i>
+  const mid = ah * bl + al * bh;          <i>// &lt;= 2^47</i>
+  const lo  = (al * bl) &gt;&gt;&gt; 16;           <i>// &lt;  2^16, exact floor</i>
+  return sat(hi * 65536 + mid + lo);      <i>// &lt;  2^48, exact in a double</i>
+}
+
+export function fdiv(a, b) {
+  if (b === 0) return a &gt;= 0 ? MAX : MIN; <i>// defined, never a trap</i>
+  return sat(Math.floor((a * 65536) / b));<i>// a*65536 &lt;= 2^47, exact</i>
+}</code></pre>
+
+      <div class="note gotcha">
+        <span class="lbl">Gotcha &mdash; the real defect is <code>&gt;&gt;</code>, not float precision</span>
+        <p>The tempting explanation is that <code>a*b</code> reaches 2<sup>62</sup>, past the 2<sup>53</sup> where doubles stop being exact integers. That is true and it is <em>not</em> what breaks the naive form. <strong>The killer is <code>&gt;&gt;</code>, which applies ToInt32 and wraps the product modulo 2<sup>32</sup>.</strong> It fails instantly, on small ordinary inputs, long before precision is in play.</p>
+        <p>The float argument is subtler than it looks, and it turns out not to bite: <code>Math.floor((a*b)/65536)</code> with saturation actually agrees with the exact result everywhere. Inexactness needs <code>|a*b| &gt; 2^53</code>, which forces the quotient past 2<sup>37</sup> &mdash; far beyond <code>FP_MAX</code>, so it saturates to the same endpoint whatever the rounding did. And any result that does <em>not</em> saturate needs <code>|a*b| &lt;= 2^47</code>, which is exact. The two regions cannot overlap; there is a comfortable gap between 2<sup>47</sup> and 2<sup>53</sup>. Verified over 3 x 10<sup>6</sup> random i32 pairs, 2.96 x 10<sup>6</sup> of them with inexact products: zero mismatches.</p>
+        <p><strong>Keep the split multiply anyway.</strong> It is exact by construction rather than by a saturation argument that has to be re-derived by every reader, and it ports unchanged to C, Rust and WASM, where the saturation step is not free and the reasoning above does not carry.</p>
+      </div>
+
+      <div class="note gotcha">
+        <span class="lbl">Gotcha &mdash; why the split form is exact</span>
+        <p><code>a*b = ah&middot;bh&middot;2^32 + (ah&middot;bl + al&middot;bh)&middot;2^16 + al&middot;bl</code>. Dividing by 2<sup>16</sup>, the first two terms stay integral and only <code>al&middot;bl</code> contributes a fraction &mdash; and <code>al</code>, <code>bl</code> are non-negative so <code>&gt;&gt;&gt; 16</code> is exactly floor. Every intermediate is below 2<sup>48</sup>, well inside the exact-integer range.</p>
+        <p><strong>Do not trust that argument &mdash; test it.</strong> A property test over 10<sup>6</sup> random pairs against a <code>BigInt</code> reference is thirty lines and it is the highest-value test in the repository. Mutation-test the test, too: break the implementation on purpose and confirm the suite goes red. Dropping the <code>lo</code> term, substituting <code>Math.trunc</code> for floor, and reinstating <code>&gt;&gt; 16</code> were each caught within ten iterations.</p>
+      </div>
+
+      <h3><span class="cn">5.2</span> Trigonometry is a committed table</h3>
+      <p><code>sys.sin</code> and <code>sys.cos</code> take an angle in <strong>1024 steps per turn</strong> and read a 1024-entry <code>Int32Array</code> of 16.16 values. That table is generated once, committed to <code>conformance/fixtures/sin1024.bin</code>, and is <strong>normative</strong>.</p>
+
+      <div class="note decide">
+        <span class="lbl">Decision &mdash; ship the table, not the formula</span>
+        <p>A formula invites every implementation to compute it with its own libm, which is precisely the last-unit-in-the-last-place divergence the specification deletes <code>Math</code> to avoid. A committed binary blob cannot diverge. It is 4 KB, it loads instantly, and conformance testing it is a byte comparison.</p>
+      </div>
+
+      <h3><span class="cn">5.3</span> Bounded random</h3>
+<pre><code><i>// n in [1, 2^31).  Unbiased, no division by a runtime value, all exact.</i>
+export function rnd(s, n) {
+  const r   = next(s);                    <i>// u32</i>
+  const hi  = (r &gt;&gt;&gt; 16) * n;              <i>// &lt; 2^47</i>
+  const lo  = (r &amp; 0xffff) * n;            <i>// &lt; 2^47</i>
+  const q   = Math.floor(hi / 65536);
+  const rem = hi - q * 65536;             <i>// &lt; 65536</i>
+  return q + Math.floor((rem * 65536 + lo) / 4294967296);
+}</code></pre>
+      <p><code>rndf()</code> is simply <code>next(s) &gt;&gt;&gt; 16</code> &mdash; a 16.16 value in [0.0, 1.0).</p>
+    </section>
+
+    <!-- 6 -->
+    <section id="raster">
+      <h2>6. The rasterizer</h2>
+      <p>The framebuffer stays <strong>packed at 4 bits per pixel</strong>, exactly as the memory map says, because <code>sys.peek</code> must see the real bytes. An unpacked shadow buffer would be faster per pixel and would make the machine a lie.</p>
+
+      <h3><span class="cn">6.1</span> Pixel write</h3>
+<pre><code>const STRIDE = 64;                        <i>// 128 px / 2 px per byte</i>
+
+function pset(fb, x, y, c) {              <i>// caller has already clipped</i>
+  const i = (y &lt;&lt; 6) + (x &gt;&gt; 1);
+  const b = fb[i];
+  fb[i] = (x &amp; 1) ? ((b &amp; 0x0f) | (c &lt;&lt; 4))
+                  : ((b &amp; 0xf0) | c);     <i>// even x = low nibble = left pixel</i>
+}</code></pre>
+
+      <div class="note gotcha">
+        <span class="lbl">Gotcha &mdash; clip once, at the edge</span>
+        <p>Clipping inside <code>pset</code> puts a branch on the hottest path in the machine. Clip in each primitive &mdash; intersect the shape with the clip rectangle before the loop &mdash; and let <code>pset</code> assume validity. Then assert validity in development builds only, compiled out of release.</p>
+      </div>
+
+      <h3><span class="cn">6.2</span> Sprite blit, with the fast path</h3>
+      <p>Source sprite data is also 4 bpp. When source and destination x are both even and no per-pixel transparency test is pending, whole bytes copy two pixels at a time. Otherwise fall back to nibble shifting.</p>
+<pre><code>if (((sx | dx) &amp; 1) === 0 &amp;&amp; !transparent &amp;&amp; !flipX) {
+  <i>// byte-aligned: copy w/2 bytes per row</i>
+} else {
+  <i>// per-pixel: read nibble, test transparency, remap, write nibble</i>
+}</code></pre>
+      <p>The fast path handles the common case &mdash; tile maps drawn on an 8-pixel grid &mdash; which is most of the pixels most games push.</p>
+
+      <h3><span class="cn">6.3</span> Palette expand, once per frame</h3>
+<pre><code><i>// rebuilt only when PALETTE_LIVE or PALETTE_HW is dirty</i>
+lut32[i] = (255 &lt;&lt; 24) | (bColor &lt;&lt; 16) | (gColor &lt;&lt; 8) | rColor;
+
+<i>// 8192 bytes in, 16384 pixels out, one pass, zero branches</i>
+let o = 0;
+for (let i = 0; i &lt; 8192; i++) {
+  const b = fb[i];
+  out32[o++] = lut32[b &amp; 0x0f];
+  out32[o++] = lut32[b &gt;&gt;&gt; 4];
+}</code></pre>
+
+      <div class="note gotcha">
+        <span class="lbl">Gotcha &mdash; the LUT is little-endian</span>
+        <p>Writing RGBA through a <code>Uint32Array</code> assumes little-endian byte order. That holds on every platform this will realistically run on, but assuming it silently is how a port breaks. Detect once at startup with a two-byte probe and select the other packing order if it fails &mdash; four lines, and it turns a mystery into a branch taken never.</p>
+      </div>
+
+      <h3><span class="cn">6.4</span> Presenting</h3>
+      <p>Main thread wraps the transferred buffer in a <code>Uint8ClampedArray</code>, builds an <code>ImageData</code>, and either <code>putImageData</code> onto a 128 x 128 backing canvas which is then drawn scaled with <code>imageSmoothingEnabled = false</code>, or uploads it with <code>texSubImage2D</code> if a CRT shader is active. CSS carries <code>image-rendering: pixelated</code> and the scale is snapped to an integer.</p>
+    </section>
+
+    <!-- 7 -->
+    <section id="audio">
+      <h2>7. Audio</h2>
+      <p>An <code>AudioWorkletProcessor</code> renders four channels in 128-sample quanta. It receives <strong>commands</strong>, never timing.</p>
+
+<pre><code>  worker (sim)          main            audio worklet thread
+      |                   |                      |
+      |  audio: Int32Array|                      |
+      |------------------&gt;|  port.postMessage    |
+      |                   |---------------------&gt;| enqueue
+      |                   |                      | render 128 frames
+      |                   |                      | at its own clock</code></pre>
+
+      <div class="note gotcha">
+        <span class="lbl">Gotcha &mdash; never read the audio clock</span>
+        <p>An <code>AudioContext</code> runs on its own hardware clock, which drifts against <code>rAF</code> and differs per device. Deriving anything in the simulation from <code>currentTime</code> makes the game nondeterministic and, worse, makes it nondeterministic <em>only on some hardware</em>. The street is one way: the sim emits commands, the mixer consumes them, nothing flows back. This is also why the specification leaves audio non-normative &mdash; mixing quality can differ without a replay diverging.</p>
+      </div>
+
+      <p>Waveforms are pulse with duty, triangle, sawtooth, noise (a 15-bit LFSR, seeded per channel and part of no snapshot because it feeds nothing back), and a 32-step user wavetable. Per-channel envelope is attack/decay/sustain/release in frame units.</p>
+    </section>
+
+    <!-- 8 -->
+    <section id="sandbox">
+      <h2>8. The sandbox</h2>
+
+      <h3><span class="cn">8.1</span> Three layers, and only two are portable</h3>
+      <p>Treating the sandbox as one thing is the mistake that produces a sandbox which looks hardened in tests and is not.</p>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Layer</th><th>What it does</th><th>Where it can run</th></tr></thead>
+          <tbody>
+            <tr><td><strong>0</strong> Source rejection</td><td>Refuses <code>import</code> and <code>export</code> at token level</td><td>Anywhere &mdash; build time and load time</td></tr>
+            <tr><td><strong>1</strong> Parameter shadowing</td><td>Every dangerous global is a parameter, passed <code>undefined</code></td><td>Anywhere, always on</td></tr>
+            <tr><td><strong>2</strong> Realm hardening</td><td>Deletes globals, neuters the four code constructors, freezes intrinsics</td><td><strong>Worker only</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Layer 2 cannot run in-process: deleting <code>Math</code> or neutering <code>Function.prototype.constructor</code> in a test runner's own realm breaks the runner. It belongs in the worker, where the realm hosts exactly one cart.</p>
+
+      <div class="note gotcha">
+        <span class="lbl">Gotcha &mdash; Layer 0 exists because <code>import()</code> is syntax, not a name</span>
+        <p><code>import("node:fs")</code> inside a <code>new Function</code> body <strong>resolves</strong>. It is not an identifier, so no parameter can shadow it and no delete can remove it. The only place to stop it is before compilation, by refusing the token.</p>
+      </div>
+
+      <h4>The bootstrap, and why it is nested</h4>
+<pre><code>const F = Function;                       <i>// capture BEFORE anything is scrubbed</i>
+
+<i>// A sloppy OUTER function holds the parameters; the cart lives in a strict</i>
+<i>// INNER one. `new F("eval", '"use strict"; ...')` is a SyntaxError in every</i>
+<i>// engine -- strict code may not BIND the name `eval` -- so the shadow list</i>
+<i>// and the strict cart body cannot share one scope.</i>
+const factory = new F(...SHADOW, 'gfx','snd','inp','sys', `
+  return (function () {
+    "use strict";
+    ${source}
+    return { boot: typeof boot === "function" ? boot : undefined,
+             tick: typeof tick === "function" ? tick : undefined };
+  })();
+`);</code></pre>
+
+      <div class="note gotcha">
+        <span class="lbl">Gotcha &mdash; the nesting opens a hole, so close it first</span>
+        <p>A source beginning <code>}, evil(), function () {</code> closes the inner function and continues in the <em>sloppy outer</em> scope, where a plain call's <code>this</code> is the real global. Layer 2 does not save you: it hands over the hardened global, which still holds <code>console</code> and <code>postMessage</code> by design.</p>
+        <p>Close it by compiling every source <strong>on its own as a strict function body first</strong>. A complete FunctionBody has balanced braces and cannot close one it did not open.</p>
+      </div>
+
+      <div class="note amend">
+        <span class="lbl">Gotcha &mdash; after the delete pass, name nothing you deleted</span>
+        <p>This one shipped, passed every test, and did nothing. The delete pass removes the global <code>Function</code>; the neutering step then referred to <code>Function</code> by identifier while building its target list, outside any <code>try</code>. <code>scrubRealm</code> threw <code>ReferenceError: Function is not defined</code> on the first line of real work &mdash; so no constructor was neutered, no intrinsic frozen, and every escape stayed open.</p>
+        <p><strong>Nothing in-process could see it</strong>, because a test runner's realm still has <code>Function</code>. It took spawning a real worker and running the real scrub on its real global to find. The rule: <strong>after the delete pass, no code in the scrub may name a scrubbed global by identifier</strong> &mdash; hold module-load references instead.</p>
+      </div>
+
+      <div class="note amend">
+        <span class="lbl">Gotcha &mdash; <code>delete globalThis.fetch</code> deletes nothing in a browser</span>
+        <p>The same class of bug, found the same way, one realm further out. On a Node worker global every scrubbable name is an <em>own</em> property, so <code>delete</code> works. On a <strong>web</strong> global it does not: WebIDL puts interface operations and attributes on the interface <em>prototype</em> &mdash; <code>DedicatedWorkerGlobalScope.prototype</code>, <code>WorkerGlobalScope.prototype</code>, <code>EventTarget.prototype</code> &mdash; and only interface <em>objects</em> on the global itself.</p>
+        <p>So <code>delete globalThis.fetch</code> removes nothing, <strong>returns <code>true</code></strong>, and leaves <code>fetch</code> one hop up the chain. Measured on Chromium 153 and Firefox 155: <strong>18 of 45 names</strong> survived a scrub that reported success &mdash; the network, <code>importScripts</code>, <code>indexedDB</code>, <code>caches</code>, <code>crypto</code>, <code>navigator</code>, <code>location</code>, the timers, and the event-listener surface.</p>
+        <p>The fix is to walk the prototype chain and delete the own property wherever it actually lives, stopping at <code>Object.prototype</code>. Node's report is byte-identical afterwards, because the walk finds everything on the first object.</p>
+      </div>
+
+      <div class="note decide">
+        <span class="lbl">The pattern behind both &mdash; and the only thing that found either</span>
+        <p>Twice now, Layer 2 has silently done nothing while a green suite said otherwise. Different mistakes, one shape: <strong>a component that can only run in an environment the tests do not create is not being tested &mdash; a stand-in that shares its name is.</strong></p>
+        <p>Neither bug was findable by reading the code, and neither was findable in-process. Both took building the real environment: a real worker, a real global, the real function. Budget for that explicitly, and run it on <em>every</em> realm you ship to &mdash; the browser defect was invisible on Node, and the Node defect was invisible everywhere else.</p>
+        <p>A corollary worth keeping: <strong>a security check that reports success is not evidence it did anything.</strong> Have the scrub return what it actually deleted, froze and neutered, and assert on that report rather than on the absence of a thrown error. Both defects announced themselves the moment the report was read instead of trusted.</p>
+      </div>
+
+      <div class="note gotcha">
+        <span class="lbl">Gotcha &mdash; scrubbing is defense in depth, not a proof</span>
+        <p>Realm scrubbing has a long tail: the four code constructors, prototype walks that start from an ABI method, getters on inherited prototypes, and whatever the next engine ships. Close the ones you know and expect to miss some. <strong>Layer 1 alone is not a security boundary</strong> &mdash; write that where implementers will read it, not only where auditors will.</p>
+        <p><strong>The actual boundary is elsewhere.</strong> Separate origin, <code>sandbox="allow-scripts"</code> without <code>allow-same-origin</code>, CSP with <code>connect-src 'none'</code>, and a worker you can terminate. A cart that defeats every line above still lands somewhere with no network and no cookies. Build the scrub for determinism first and containment second, and let the origin do the security.</p>
+      </div>
+
+      <h3><span class="cn">8.2</span> The canary suite</h3>
+      <p>Maintain a directory of escape attempts as ordinary test carts &mdash; reaching a global, constructing a function, touching the network, reading the clock, mutating a frozen intrinsic. Each asserts that the attempt throws or yields <code>undefined</code>. Every new engine release is a reason to run it. This suite only ever grows.</p>
+    </section>
+
+    <!-- 9 -->
+    <section id="container">
+      <h2>9. Container codec</h2>
+
+      <h3><span class="cn">9.1</span> Decoding is adversarial input</h3>
+      <p>A cart arrives from a stranger. The decoder is the one place in the system where hostile bytes meet parsing code, so it is written defensively and fuzzed.</p>
+      <ol class="list">
+        <li>Verify magic and <code>spec_major</code> before reading anything else.</li>
+        <li>Validate <code>index_offset</code> and <code>chunk_count</code> against the actual file length <em>before</em> allocating.</li>
+        <li>Cap total declared chunk length at the profile's cart budget. A 40-byte file claiming a 4 GB chunk must be rejected, not attempted.</li>
+        <li>Walk chunks with bounds checks on every step. Never trust a length field twice.</li>
+        <li>Refuse an unknown <strong>critical</strong> chunk (uppercase first byte); skip an unknown <strong>ancillary</strong> one silently.</li>
+        <li>Return a typed error, never throw a raw exception into the player.</li>
+      </ol>
+
+      <h3><span class="cn">9.2</span> Cart id</h3>
+<pre><code>cart_id = SHA-256(canonical bytes, excluding the sign chunk)
+          -&gt; first 160 bits -&gt; Crockford base32 -&gt; 32 chars
+          displayed as 4 groups of 8</code></pre>
+
+      <div class="note decide">
+        <span class="lbl">Decision &mdash; one hash function, not two</span>
+        <p>The specification's first draft said BLAKE3. Building it changed the answer: BLAKE3 in portable JavaScript is several hundred lines of tree hashing, kept bit-exact forever, for a marginal win on a 64 KB payload that SHA-256 hashes in about a millisecond. The runtime already carries a pure-JS SHA-256 with no platform branch, checked against the NIST vectors, and it is the same instrument behind every conformance chain. A second hash is a second thing that can disagree between implementations, and cart identity is the last place you want that.</p>
+      </div>
+      <p>Because the identity covers the label image and the recipe, the hash must be computed over the <em>canonical serialization</em>, not over whatever bytes happened to arrive: chunks in fixed order, four-byte alignment padding zeroed, no chunk appearing twice. The encoder produces canonical output; the decoder re-serializes canonically before hashing anything it did not write. Otherwise two byte-different files with identical content get different ids and reproducible builds mean nothing.</p>
+
+      <div class="note gotcha">
+        <span class="lbl">Gotcha &mdash; PNG steganography needs the alpha channel left alone</span>
+        <p>The <code>.cart.png</code> form stores payload in the low two bits of R, G, B and A across a 128 x 128 image &mdash; one byte per pixel, 16,384 bytes per image, so a full 64 KB cart needs a 256 x 256 label or a second image. Writing the low bits of alpha makes some pipelines premultiply and destroy the data. Use R, G, B only (six bits per pixel) and size the label accordingly, or keep alpha pinned at 255 and accept the smaller capacity. Decide this before the first cart ships, because it is baked into every published image.</p>
+      </div>
+    </section>
+
+    <!-- 10 -->
+    <section id="tokens">
+      <h2>10. The tokenizer</h2>
+      <p class="lede">This was flagged as an open question in the specification. It is the first thing to close, because a budget that two tools disagree about is not a budget.</p>
+
+      <p>Rules, chosen to be simple enough that a second implementation matches on the first attempt:</p>
+      <ul>
+        <li>Tokenize per the ECMAScript lexical grammar, <code>InputElementDiv</code> goal.</li>
+        <li><strong>Every token counts as one.</strong> No exceptions, no free punctuation, no discounted keywords. Simple rules survive; clever ones drift.</li>
+        <li>Whitespace, line terminators and comments count as zero.</li>
+        <li>A template literal counts one per literal chunk plus one per <code>${</code> plus the tokens of each substitution.</li>
+        <li>A regular expression literal counts one.</li>
+        <li>Automatic semicolon insertion inserts nothing countable.</li>
+      </ul>
+
+      <p>The implementation in <code>core/tokenize.ts</code> is <strong>normative</strong>. Fixtures live in <code>conformance/tokens/</code> as source-and-count pairs, and a second implementation is conformant when it matches all of them. The counter is exposed in the editor and in <code>sq1 build</code> output, always, never behind a flag.</p>
+    </section>
+
+    <!-- 11 -->
+    <section id="stamper">
+      <h2>11. The stamper</h2>
+      <p>Seven stages, seven pure functions. Each takes the previous stage's output and produces the next, with no shared mutable state &mdash; which is what makes the build reproducible and every stage independently testable.</p>
+
+<pre><code>resolve(recipe)            -&gt; ResolvedRecipe   <i>refs -&gt; hashes -&gt; bytes</i>
+merge(resolved)            -&gt; MergedSpec       <i>layer, later key wins</i>
+bind(merged)               -&gt; BoundSpec        <i>knobs -&gt; values</i>
+validate(bound)            -&gt; Diagnostic[]     <i>empty = ok</i>
+compile(bound)             -&gt; Payload          <i>canonical byte order</i>
+pack(payload, assets)      -&gt; CartFile         <i>chunks, id, optional sign</i>
+prove(cart, replay)        -&gt; HashChain        <i>600 frames headless</i></code></pre>
+
+      <div class="note decide">
+        <span class="lbl">Decision &mdash; diagnostics carry source positions</span>
+        <p>Every <code>Diagnostic</code> names the recipe file, line and column, the module that raised it, and what would satisfy it. This is the entire ergonomic case for the recipe format: an unbound knob or a tileset missing a <code>ladder</code> flag must read like a compiler error, not like a stack trace. If diagnostics are vague, authors will abandon recipes for the inline-code escape hatch and the module ecosystem never forms.</p>
+      </div>
+
+      <h3><span class="cn">11.1</span> Reproducibility checklist</h3>
+      <p>Same recipe, same module versions, byte-identical cart. Four things break this and all four are avoidable:</p>
+      <ul>
+        <li><strong>Map or object iteration order.</strong> Sort keys explicitly before serializing anything.</li>
+        <li><strong>Timestamps.</strong> No build time, no file mtime, anywhere in the output.</li>
+        <li><strong>Absolute paths.</strong> Store module references as hashes, never as paths.</li>
+        <li><strong>Floating-point formatting.</strong> Knob values are parsed to 16.16 at bind time and serialized as integers. A recipe's <code>0.42</code> becomes <code>27524</code> in the cart, and never round-trips through a decimal string.</li>
+      </ul>
+      <p>The CI check is one line: build twice in different directories, compare hashes.</p>
+
+      <h3><span class="cn">11.2</span> The prover reuses the runtime</h3>
+      <p>Because the worker is a pure function of its messages (section 3), the headless prover is the same <code>runtime</code> package driven from Node with a synthetic message loop. There is no second implementation of the machine, and therefore no second implementation to drift.</p>
+    </section>
+
+    <!-- 12 -->
+    <section id="test">
+      <h2>12. Test strategy</h2>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Level</th><th>What it covers</th><th>Runs</th></tr></thead>
+          <tbody>
+            <tr><td><strong>L1</strong> Unit and property</td><td><code>fmul</code>/<code>fdiv</code> against a BigInt reference over 10<sup>6</sup> pairs; PRNG against published vectors; container round-trip; tokenizer against fixtures</td><td>Every commit, seconds</td></tr>
+            <tr><td><strong>L2</strong> Golden master</td><td>Each conformance cart x replay, comparing the full SHA-256 frame-hash chain</td><td>Every commit, on Node and headless Chrome and Firefox</td></tr>
+            <tr><td><strong>L3</strong> Fuzz</td><td>Random bytes into the container decoder: must never throw uncaught, never allocate unboundedly, never loop forever</td><td>Nightly, with a corpus</td></tr>
+            <tr><td><strong>L4</strong> Canary</td><td>The escape-attempt carts of section 8.2</td><td>Every commit and on every browser update</td></tr>
+            <tr><td><strong>L5</strong> Performance</td><td>p99 tick time on reference carts; zero allocations inside <code>tick()</code></td><td>Every commit, with a regression threshold</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note decide">
+        <span class="lbl">Decision &mdash; golden master exists before the first sprite is drawn</span>
+        <p>Build the frame-hash harness in milestone 1, when the machine draws nothing but a gradient. Determinism drift is silent, cumulative, and diagnosed by bisecting hash chains &mdash; which only works if the chains predate the drift. Every emulator project that added this late regrets exactly one thing.</p>
+      </div>
+
+      <h4>What a conformance case looks like on disk</h4>
+<pre><code>conformance/cases/spin-and-collide/
+  cart.sq1c            the cart under test
+  replay.bin           4 bytes per frame, 600 frames
+  seed.txt             the session seed
+  chain.txt            600 SHA-256 hashes, one per line
+  frames/000.png       ten reference frames for eyeball debugging
+</code></pre>
+      <p>When a chain mismatches, the harness reports the first divergent frame number. That number, plus the reference PNG next to your actual output, is nearly always enough to find the bug in minutes.</p>
+    </section>
+
+    <!-- 13 -->
+    <section id="perf">
+      <h2>13. Performance budget</h2>
+      <p>16.67 ms per frame. The machine is small enough that the budget is embarrassing, which is the point &mdash; it should run at 60 fps on a five-year-old phone with the screen dimmed.</p>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Stage</th><th>Budget</th><th>Expected</th></tr></thead>
+          <tbody>
+            <tr><td>Cart <code>tick()</code>, including all rasterization</td><td>8.0 ms</td><td>0.3 &ndash; 2.0 ms</td></tr>
+            <tr><td>Palette expand, 16,384 pixels</td><td>0.5 ms</td><td>~0.05 ms</td></tr>
+            <tr><td>Buffer transfer, both directions</td><td>0.1 ms</td><td>~0.01 ms</td></tr>
+            <tr><td>Present (scale and draw)</td><td>1.0 ms</td><td>~0.3 ms</td></tr>
+            <tr><td>Audio, per 128-sample quantum, separate thread</td><td>0.2 ms</td><td>~0.05 ms</td></tr>
+            <tr><td><strong>Watchdog: terminate the worker</strong></td><td><strong>12 ms</strong></td><td>&mdash;</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4>The allocation rule</h4>
+      <p><strong>Zero allocations inside <code>tick()</code>.</strong> Every buffer, entity pool and scratch array is created at load. No closures per frame, no array literals, no string concatenation, no boxed iterators. Garbage collection is the only thing in this design capable of causing a visible hitch, and the way to never think about it again is to never give it anything to collect.</p>
+      <p>Enforce it: in development builds, wrap <code>tick()</code> with a heap-delta probe and fail the performance suite if a reference cart allocates.</p>
+    </section>
+
+    <!-- 14 -->
+    <section id="milestones">
+      <h2>14. Milestones</h2>
+      <p class="lede">Each has a binary acceptance test. "Looks right" is not one of them.</p>
+
+      <div class="ms">
+        <div class="h"><span class="id">M0</span><span>Core primitives</span></div>
+        <p><code>core/</code> only: fixed point, xoshiro128**, the sin table generator, the tokenizer. No console, no rendering, no cart.</p>
+        <p class="acc"><b>Accept when</b> the property suite passes 10<sup>6</sup> random pairs against BigInt for <code>fmul</code> and <code>fdiv</code>; the PRNG matches published xoshiro128** vectors; <code>sin1024.bin</code> is committed and byte-stable across two machines; the tokenizer matches every fixture.</p>
+      </div>
+
+      <div class="ms">
+        <div class="h"><span class="id">M1</span><span>Runtime skeleton and golden master</span></div>
+        <p>Worker, memory map, the message protocol, a hardcoded cart that draws a moving gradient. And the frame-hash harness.</p>
+        <p class="acc"><b>Accept when</b> a 60-frame run produces an identical SHA-256 chain on Node, Chrome and Firefox, on two different machines.</p>
+      </div>
+
+      <div class="ms">
+        <div class="h"><span class="id">M2</span><span>Container and CLI</span></div>
+        <p><code>cart/</code> plus <code>sq1 build | validate | hash</code>. Encode, decode, canonicalize, hash.</p>
+        <p class="acc"><b>Accept when</b> a cart round-trips byte-identically; <code>sq1 hash</code> agrees across machines; a cart with an unknown ancillary chunk loads and one with an unknown critical chunk is refused with a named error; 10,000 fuzz iterations produce no uncaught throw.</p>
+      </div>
+
+      <div class="ms">
+        <div class="h"><span class="id">M3</span><span>Real carts, scrubbed</span></div>
+        <p>The sandbox bootstrap, the ABI surface, faults and the watchdog. Hand-written JavaScript carts now run.</p>
+        <p class="acc"><b>Accept when</b> every canary cart fails to escape; a cart referencing <code>Date</code> or <code>Math</code> is rejected at build time with a line number; an infinite loop in <code>tick()</code> produces a <code>fault</code> and a recovered player within 200 ms.</p>
+      </div>
+
+      <div class="ms">
+        <div class="h"><span class="id">M4</span><span>Full rasterizer, audio, shell</span></div>
+        <p>Every <code>gfx</code> call, the four-channel synth, the touch shell, integer scaling.</p>
+        <p class="acc"><b>Accept when</b> a reference cart renders pixel-identical to ten committed PNGs; p99 <code>tick()</code> is under 4 ms on a mid-range phone; the allocation probe reports zero bytes per frame.</p>
+      </div>
+
+      <div class="ms">
+        <div class="h"><span class="id">M5</span><span>Stamper and the first engine</span></div>
+        <p>All seven stages, the module manifest format, one <code>platformer</code> engine, one art pack. Recipe in, playable cart out.</p>
+        <p class="acc"><b>Accept when</b> the same recipe built in two different directories on two machines produces identical cart ids; a recipe with an unbound knob fails with a file, line and suggested fix; the prover gates the pack step.</p>
+      </div>
+
+      <div class="ms">
+        <div class="h"><span class="id">M6</span><span>The second engine</span></div>
+        <p>A <code>topdown</code> engine, built against the module interface as it stands.</p>
+        <p class="acc"><b>Accept when</b> it ships with <em>no changes</em> to the provides/requires contract &mdash; or the required changes are documented as version 2 of the manifest format, with a migration for the first engine. This milestone is the honest test of section 8 of the specification, and failing it early is cheap.</p>
+      </div>
+    </section>
+
+    <!-- 15 -->
+    <section id="week1">
+      <h2>15. The first week</h2>
+      <p>M0 is small enough to finish in days and it de-risks the two things that cannot be fixed later.</p>
+      <ol class="list">
+        <li>Scaffold the pnpm workspace and <code>core/</code>. No framework, no bundler yet.</li>
+        <li>Write <code>fmul</code>, <code>fdiv</code>, <code>sat</code>, and the BigInt reference beside them.</li>
+        <li>Write the property test. Run it for a million pairs. <em>This is the moment the project either has a foundation or does not.</em></li>
+        <li>Port xoshiro128** and check it against the published vectors.</li>
+        <li>Generate and commit <code>sin1024.bin</code>, plus the generator and a test that regenerating it produces identical bytes.</li>
+        <li>Write the tokenizer and twenty fixtures, including the awkward ones: template literals with nested substitutions, regex-versus-division ambiguity, ASI.</li>
+        <li>Wire CI to run all of it on Node, Chrome and Firefox.</li>
+      </ol>
+      <p>Then, and only then, decide whether the three amendments in section 1 are accepted &mdash; because by the end of that week you will have implemented the code that motivated all three, and the argument will be concrete rather than theoretical.</p>
+    </section>
+
+  </main>
+
+  <footer>
+    <span>Square One Engineering Guide &mdash; Draft 1</span>
+    <span>Companion to the Console Specification</span>
+    <span>Binary acceptance criteria only</span>
+  </footer>
+
+</div>

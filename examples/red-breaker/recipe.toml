@@ -1,0 +1,134 @@
+# Red Breaker
+#
+# A recipe: three modules and the numbers that turn them into one game.
+#
+#     sq1 stamp examples/red-breaker      -> examples/red-breaker.cart
+#
+# THREE, NOT FOUR, AND THAT IS THE INTERESTING PART. `cave-runner` and
+# `moss-keep` each name an engine, a palette, a tileset and a spriteset.
+# `breakout` draws every block, the paddle, the ball, the drops, the shots and
+# the beam as FILLED RECTANGLES in live palette slots, the way the original
+# cabinet drew coloured bars -- so its `[requires]` is `palette = true` with
+# `tileset` and `spriteset` both `false`, and there is no art pack to name. What
+# replaces them is a `content` module: ten hand-authored levels in the `MAP `
+# and `DATA` chunks, which is the fourth of the eight module kinds this
+# repository has now shipped.
+#
+# So the entire visual identity of this cart is `[tuning]` below plus sixteen
+# numbers in `modules/arcade/module.toml`, and the whole of its design is
+# `modules/redlevels/gen.mjs`. Change the palette line and it is the same game
+# in different colours; change the content line and it is a different game.
+
+[cart]
+title   = "Red Breaker"
+author  = "square one"
+payload = "script/js1"
+
+[modules]
+engine  = "breakout@1.0.0"
+# `arcade` fills the palette slot and also ships the 64-cell sprite sheet. A
+# module occupies exactly one slot, and the engine requires a palette, so that
+# is the slot it takes -- the cells install regardless of kind, because the
+# stamper composes a pack's `[provides] data` without asking what the pack is
+# called. The engine then decides sprites-or-rectangles by reading the bytes at
+# `sprite_base`, so nothing here has to say which one is happening.
+palette   = "arcade@1.0.0"
+content   = "redlevels@1.0.0"
+# The sound. Every default in `breakout` is already the effect number the bank
+# uses, so there is nothing to override: the engine and the bank were numbered
+# against the same table in modules/FORMATS-breakout-art.md.
+soundbank = "redsound@1.0.0"
+
+
+[tuning]
+
+# --- the field ---------------------------------------------------------------
+# These four are the engine's own defaults, written out because `redlevels`
+# DEPENDS on them. How far a red block is above the paddle is how long the
+# player has to move, and that distance is `paddle_y - (field_top + row *
+# block_h + block_h)`. modules/redlevels/gen.mjs repeats these numbers at the
+# top of its check section and prints the frame count every red block gives;
+# change one here and the levels want re-reading against the new table.
+grid_w     = 16
+grid_h     = 12
+block_w    = 8
+block_h    = 6
+field_top  = 10
+paddle_y   = 110
+map_band   = 8
+level_count = 10
+
+# --- feel --------------------------------------------------------------------
+# The one override that is not a colour or a binding. The engine's default
+# paddle speed is 1.75 pixels a frame and level ten's ball travels 2.75, of
+# which up to 2.6 is horizontal -- a paddle slower than the ball it is chasing
+# turns the last two levels into a guess. At 2.25 the paddle covers 56 pixels in
+# the 25 frames level ten's lowest red block gives, and it only needs 13 of them
+# to be out of the way. That is the number the whole red-block mechanic rests
+# on, so it is set here rather than left.
+paddle_speed = 2.25
+
+# A drifting row slides a full block each way instead of the engine's six
+# pixels. Level six's gap is meant to CLOSE, not to breathe: at 6 the red blocks
+# behind it stay reachable the whole cycle and the mechanic is decoration.
+# `redlevels` checks its drifting rows against this number -- they run columns 2
+# to 13, so they stay on screen at this range and at twice it.
+drift_range = 8
+
+# --- colour ------------------------------------------------------------------
+# Every one of these is a LIVE PALETTE SLOT, 0..15. The numbers come from the
+# [names] table in modules/arcade/module.toml, and that table exists because
+# these seventeen lines are the entire binding between an engine that has never
+# heard of a colour and a palette that has never heard of a block.
+#
+# THE THREE THAT MATTER MOST ARE ALREADY THE ENGINE'S DEFAULTS, and that is not
+# a coincidence: `arcade` puts DANGER RED on slot 11 precisely because
+# `color_red`, `ball_red_color` and `beam_color` default there. The red block,
+# the red ball and the beam are one mechanic and they are one colour, and the
+# two files agree about it without either having to be edited.
+bg_color        = 1     # the field behind the blocks
+color_plain     = 3     # blue -- one hit
+color_tough     = 2     # green -- a TWO-hit block at full health
+color_hard      = 13    # deep blue -- a THREE-hit block at full health.
+                        # Distinct from color_tough on purpose: sharing one
+                        # colour leaves a player unable to see the shape of a
+                        # mixed wall, so level 4's hard core would be invisible
+                        # and they would find it only by spending a ball.
+                        # Deep blue against the plain block's bright blue reads
+                        # as the same family, denser. It is deliberately NOT
+                        # slot 9 or 10: mistaking a three-hit block for a solid
+                        # one that never breaks is the worst error available.
+                        # The side pads share this slot and cannot be confused
+                        # with it -- they sit at the screen edges, and only on
+                        # levels that have them.
+color_damaged   = 8     # deep green -- the same block, hurt. One step darker,
+                        # same hue, which is what makes "hurt" readable at 8x6.
+color_red       = 11    # DANGER RED
+color_solid     = 9     # mid slate -- structure. Bright enough that level
+                        # nine's lanes read as walls rather than as gaps.
+color_shield    = 10    # silver -- glass over something
+color_drift     = 5     # purple -- the only block that moves
+color_prize     = 4     # gold
+paddle_color    = 6     # white
+pad_color       = 13    # deep blue -- the one hue nothing else uses, because a
+                        # side pad has to be noticed before it is explained
+ball_color      = 6     # white
+ball_red_color  = 11    # DANGER RED, and the same slot as color_red
+beam_color      = 11    # DANGER RED, and the same slot again
+shot_color      = 4     # gold, like the gun drop that granted it
+hud_color       = 15    # near-white, a step softer than the ball
+hud_y           = 2
+
+# `drop_color` names the FIRST OF SIX CONSECUTIVE SLOTS, one per drop kind in
+# DROP_MASK's bit order. Starting at 2 lays them out as:
+#
+#     2 wide   green        5 multi  purple
+#     3 slow   blue         6 life   WHITE -- the same white as the paddle,
+#     4 gun    gold                  because a life IS another paddle
+#     7 catch  pale mint
+#
+# It cannot start at 8, which is the natural place against `sweetie16`: that
+# would put `multi` on slot 11, and slot 11 is the colour the ball turns when it
+# is about to kill you. Six consecutive slots is a constraint on the palette,
+# not on the recipe, and `arcade` was laid out to satisfy it.
+drop_color = 2

@@ -1,0 +1,92 @@
+# Cave Runner
+#
+# A recipe: four modules and the numbers that turn them into one game. There is
+# no code in this directory and there does not need to be -- the engine is
+# `platformer`, the art is `caves` and `hero`, the colours are `sweetie16`, and
+# everything below is the part that makes this cart different from the next one
+# built out of the same four.
+#
+#     sq1 stamp examples/cave-runner      -> examples/cave-runner.cart
+#
+# TO MAKE IT FEEL DIFFERENT, change [tuning]. Heavier gravity and a shorter jump
+# make a cautious game; more air_accel and a longer coyote window make a fast
+# one. Nothing here needs the engine to be edited, and that is the whole point
+# of the module system.
+
+[cart]
+title   = "Cave Runner"
+author  = "square one"
+payload = "script/js1"
+
+[modules]
+engine    = "platformer@1.0.0"
+palette   = "sweetie16@1.0.0"
+tileset   = "caves@1.0.0"
+spriteset = "hero@1.0.0"
+
+
+[tuning]
+
+# --- the cave --------------------------------------------------------------
+# The level is a pure function of this number. It is written down here rather
+# than taken from a clock so that every player gets the same cave, and so that
+# the cart id -- which is a hash of the bytes -- names one particular game.
+level_seed  = 20260909
+
+map_width   = 120
+map_height  = 32
+ground_row  = 22
+ground_vary = 6
+
+# Overridden from the engine's defaults: this cave has more holes in it than the
+# engine assumes, and pays for them with slightly gentler gravity below.
+pit_chance      = 20
+spike_chance    = 26
+platform_chance = 48
+crawler_chance  = 24
+gem_chance      = 60
+
+start_tile_x = 2
+start_tile_y = 18   # four tiles above the floor, so the game opens on a landing
+
+# --- feel ------------------------------------------------------------------
+# Two overrides and nothing else. A lighter fall and a slightly stronger jump
+# than the engine's defaults, because this cave asks for more distance than
+# height and the ledges sit four rows up.
+gravity        = 0.38
+jump_velocity  = -3.35
+
+# Eight frames of coyote time instead of six. The pits here are wide, and the
+# jump that gets eaten at the lip of one is the jump players remember.
+coyote_frames  = 8
+
+# --- which tile is which ---------------------------------------------------
+# The engine knows nothing about the caves pack; these lines are the entire
+# binding between them. The numbers come from the [names] table in
+# modules/caves/module.toml.
+tile_rock       = 1    # rock
+tile_rock_top   = 3    # rock_top, the mossy floor cap
+tile_ceiling    = 8    # rock_bottom, the shaded underside of the roof
+tile_dirt       = 13   # dirt
+tile_lava       = 27   # lava_top
+tile_spike      = 23   # spikes_up
+tile_platform   = 20   # ledge_mid
+tile_platform_l = 19   # ledge_left
+tile_platform_r = 21   # ledge_right
+tile_bg         = 50   # bg_dark_fleck, so the open air is not flat
+
+# --- which sprite is which -------------------------------------------------
+# From the [names] table in modules/hero/module.toml. The runner is two cells
+# tall, so sprite_cells_h stays at the engine's default of 2.
+sprite_idle    = 64
+sprite_run     = 66
+sprite_jump    = 70
+sprite_fall    = 71
+sprite_hurt    = 72
+sprite_crawler = 73
+sprite_gem     = 75
+
+# --- presentation ----------------------------------------------------------
+bg_color      = 1     # sweetie16 slot 1: the deep shadow at the back of a cave
+hud_color     = 6
+camera_smooth = 0.1875

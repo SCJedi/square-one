@@ -1,0 +1,602 @@
+# The `platformer` engine.
+#
+# A side-scrolling platformer core: gravity, coyote time, a jump buffer,
+# separated tile collision, a following camera, hazards, death and respawn, and
+# a small entity pool. It ships no art and no level data. Everything it draws
+# comes from the packs a recipe pairs it with, and everything it feels like
+# comes from the knobs below.
+#
+# THE RULE THIS FILE FOLLOWS: if a number in engine.js could reasonably be
+# different in another game, it is a knob here. There are no magic numbers left
+# in the engine except the machine's own -- 8 pixels to a tile, 128 to a screen.
+#
+# A knob with no `default` is REQUIRED: the recipe must set it, and the stamper
+# refuses the build if it does not. Everything that binds the engine to a
+# particular art pack is required, because there is no sensible default for
+# "which tile is the floor".
+
+[module]
+kind    = "engine"
+name    = "platformer"
+version = "1.0.0"
+
+[provides]
+# The size of the entity pool in USER_RAM. Entity 0 is always the player; the
+# rest are filled by the level generator. This is the ceiling; the `entities`
+# knob says how many of them a given game actually uses.
+entities = 24
+
+[requires]
+# A palette pack, so the art has sixteen colours to mean something by.
+palette   = true
+# A tileset with at least 64 tiles that marks solid and hazard tiles. The engine
+# reads those two flags out of SPRITE_FLAGS and does not care what the art is.
+tileset   = { min_tiles = 64, flags = ["solid", "hazard"] }
+# A spriteset with at least twelve cells: the runner's frames, a crawler and a
+# pickup. Which index is which is bound by the sprite_* knobs.
+spriteset = { min_sprites = 12 }
+# Sound is optional. The engine calls snd.sfx with the ids below; with no
+# soundbank those effects are silent, which is not an error.
+soundbank = false
+
+
+# ============================================================================
+# Feel -- how the runner moves
+# ============================================================================
+
+[knobs.gravity]
+type    = "fixed"
+default = 0.42
+min     = 0.0
+max     = 4.0
+doc     = "Downward acceleration per frame, in pixels. The single number that decides how heavy the game feels."
+
+[knobs.max_fall_speed]
+type    = "fixed"
+default = 5.0
+min     = 0.5
+max     = 16.0
+doc     = "Terminal velocity, in pixels per frame. Above 8 a fall can pass through a one-tile floor."
+
+[knobs.run_accel]
+type    = "fixed"
+default = 0.45
+min     = 0.01
+max     = 4.0
+doc     = "Horizontal acceleration per frame while on the ground."
+
+[knobs.air_accel]
+type    = "fixed"
+default = 0.28
+min     = 0.0
+max     = 4.0
+doc     = "Horizontal acceleration per frame while airborne. Below run_accel gives the jump some commitment."
+
+[knobs.max_run_speed]
+type    = "fixed"
+default = 1.75
+min     = 0.1
+max     = 8.0
+doc     = "Top horizontal speed, in pixels per frame."
+
+[knobs.ground_friction]
+type    = "fixed"
+default = 0.62
+min     = 0.0
+max     = 1.0
+doc     = "Speed retained per frame with no direction held, on the ground. 1.0 is ice."
+
+[knobs.air_friction]
+type    = "fixed"
+default = 0.94
+min     = 0.0
+max     = 1.0
+doc     = "Speed retained per frame with no direction held, in the air."
+
+[knobs.idle_speed]
+type    = "fixed"
+default = 0.12
+min     = 0.0
+max     = 2.0
+doc     = "Below this speed the runner is drawn idling rather than running."
+
+[knobs.jump_velocity]
+type    = "fixed"
+default = -3.1
+min     = -12.0
+max     = -0.5
+doc     = "Upward velocity given by a jump, in pixels per frame. Negative is up."
+
+[knobs.jump_cut]
+type    = "fixed"
+default = 0.45
+min     = 0.0
+max     = 1.0
+doc     = "Rising velocity kept when A is released early. 1.0 removes variable jump height entirely."
+
+[knobs.coyote_frames]
+type    = "int"
+default = 6
+min     = 0
+max     = 30
+doc     = "Frames after walking off a ledge during which a jump still works. Zero is the version players call unresponsive."
+
+[knobs.jump_buffer_frames]
+type    = "int"
+default = 5
+min     = 0
+max     = 30
+doc     = "Frames a jump press is remembered for while still falling, so a press just before landing is not eaten."
+
+
+# ============================================================================
+# Bodies
+# ============================================================================
+
+[knobs.player_width]
+type    = "int"
+default = 6
+min     = 1
+max     = 32
+doc     = "The player's collision box width in pixels. Usually narrower than the sprite, so shoulders do not catch on doorways."
+
+[knobs.player_height]
+type    = "int"
+default = 14
+min     = 1
+max     = 32
+doc     = "The player's collision box height in pixels."
+
+[knobs.crawler_width]
+type    = "int"
+default = 8
+min     = 1
+max     = 32
+doc     = "Collision box width of a pool crawler."
+
+[knobs.crawler_height]
+type    = "int"
+default = 7
+min     = 1
+max     = 32
+doc     = "Collision box height of a pool crawler."
+
+[knobs.crawler_speed]
+type    = "fixed"
+default = 0.35
+min     = 0.0
+max     = 4.0
+doc     = "How fast a crawler walks, in pixels per frame."
+
+[knobs.entities]
+type    = "int"
+default = 24
+min     = 1
+max     = 24
+doc     = "How many entity slots this game uses, out of the pool the engine provides. Slot 0 is the player."
+
+[knobs.death_frames]
+type    = "int"
+default = 36
+min     = 1
+max     = 240
+doc     = "How long the death animation runs before the respawn."
+
+[knobs.death_pop]
+type    = "fixed"
+default = -1.6
+min     = -8.0
+max     = 0.0
+doc     = "Upward velocity given at the moment of death, so the body hops before it drops."
+
+
+# ============================================================================
+# The world
+# ============================================================================
+
+[knobs.level_seed]
+type = "int"
+min  = 0
+max  = 2147483647
+doc  = "The whole level is a pure function of this number. Change it and you get a different cave; ship it and every player gets the same one."
+
+[knobs.map_width]
+type    = "int"
+default = 120
+min     = 16
+max     = 128
+doc     = "Level width in tiles. The console's map is 128 x 64."
+
+[knobs.map_height]
+type    = "int"
+default = 32
+min     = 16
+max     = 64
+doc     = "Level height in tiles."
+
+[knobs.ground_row]
+type    = "int"
+default = 22
+min     = 2
+max     = 62
+doc     = "The tile row the floor sits on before ground_vary is added."
+
+[knobs.ground_vary]
+type    = "int"
+default = 5
+min     = 1
+max     = 24
+doc     = "How many rows the floor may step down over the course of the level. 1 is a flat plain."
+
+[knobs.ceiling_rows]
+type    = "int"
+default = 2
+min     = 0
+max     = 16
+doc     = "Rows of solid rock along the top of the map."
+
+[knobs.pit_chance]
+type    = "int"
+default = 16
+min     = 0
+max     = 100
+doc     = "Percent of four-column chunks that are a pit with lava at the bottom. The first two chunks are never pits."
+
+[knobs.spike_chance]
+type    = "int"
+default = 26
+min     = 0
+max     = 100
+doc     = "Percent of chunks that grow a spike on the floor."
+
+[knobs.platform_chance]
+type    = "int"
+default = 45
+min     = 0
+max     = 100
+doc     = "Percent of chunks carrying a floating ledge."
+
+[knobs.platform_height]
+type    = "int"
+default = 4
+min     = 1
+max     = 16
+doc     = "How far above the floor a ledge sits, before a small random extra. Must stay inside one jump."
+
+[knobs.crawler_chance]
+type    = "int"
+default = 22
+min     = 0
+max     = 100
+doc     = "Percent of chunks that spawn a crawler."
+
+[knobs.gem_chance]
+type    = "int"
+default = 55
+min     = 0
+max     = 100
+doc     = "Percent of chunks that spawn a gem."
+
+[knobs.start_tile_x]
+type    = "int"
+default = 2
+min     = 0
+max     = 127
+doc     = "Where the player starts and respawns, in tiles. The first two chunks are forced flat, so anything under column 8 is safe."
+
+[knobs.start_tile_y]
+type = "int"
+min  = 0
+max  = 63
+doc  = "The start row, in tiles. Set it a little above ground_row so the player drops onto the floor rather than into it."
+
+[knobs.edge_solid]
+type    = "bool"
+default = true
+doc     = "Treat everything outside the map as wall. False lets the player walk off the ends of the level."
+
+
+# ============================================================================
+# Binding to a tileset
+#
+# `indexes = "tileset"` marks a knob whose value is a CELL OF THE SHEET the
+# tileset fills, so the stamper bounds it against that pack's own size rather
+# than against the 0 .. 255 a byte allows. `tile_lava = 200` against a 64-tile
+# pack is inside this knob's declared range and outside the art entirely, and
+# `min`/`max` cannot see the difference -- the range is a fact about the engine,
+# and how much art a recipe paired it with is not knowable when the engine is
+# written.
+#
+# IT IS WRITTEN OUT RATHER THAN GUESSED FROM THE NAME, and the knobs directly
+# below are why. `solid_flag` and `hazard_flag` are BIT numbers, `draw_layer` is
+# a bit MASK, and in the spriteset section `sprite_run_frames` is a count,
+# `sprite_cells_w`/`sprite_cells_h` are widths in cells and
+# `sprite_offset_x`/`sprite_offset_y` are pixel offsets that go negative. Every
+# one of them shares a prefix with a real index and none of them is one.
+# Inferring the field from the name would bound a pixel offset against a tile
+# count -- a check that refuses correct manifests, which is worse than the
+# absent check it replaced. So the manifest says it.
+# ============================================================================
+
+[knobs.solid_flag]
+type    = "int"
+default = 1
+min     = 1
+max     = 255
+doc     = "The SPRITE_FLAGS bit a tileset uses for `solid`."
+
+[knobs.hazard_flag]
+type    = "int"
+default = 2
+min     = 1
+max     = 255
+doc     = "The SPRITE_FLAGS bit a tileset uses for `hazard`."
+
+[knobs.draw_layer]
+type    = "int"
+default = 0
+min     = 0
+max     = 255
+doc     = "Layer mask passed to gfx.map. 0 draws every tile; a non-zero value draws only tiles whose flags intersect it."
+
+[knobs.tile_rock]
+type    = "int"
+indexes = "tileset"
+min     = 1
+max     = 255
+doc     = "The solid tile the ceiling and the shallow underground are made of."
+
+[knobs.tile_rock_top]
+type    = "int"
+indexes = "tileset"
+min     = 1
+max     = 255
+doc     = "The tile laid along the top of the floor -- the one with the grass, moss or snow on it."
+
+[knobs.tile_ceiling]
+type    = "int"
+indexes = "tileset"
+min     = 1
+max     = 255
+doc     = "The tile on the underside of the roof, where the rock is seen from below. Give it the shaded-underneath tile and the ceiling stops looking like a floor upside down."
+
+[knobs.tile_dirt]
+type    = "int"
+indexes = "tileset"
+min     = 1
+max     = 255
+doc     = "The solid tile filling everything more than two rows below the floor."
+
+[knobs.tile_lava]
+type    = "int"
+indexes = "tileset"
+min     = 1
+max     = 255
+doc     = "The hazard tile at the bottom of a pit."
+
+[knobs.tile_spike]
+type    = "int"
+indexes = "tileset"
+min     = 1
+max     = 255
+doc     = "The hazard tile that grows on the floor."
+
+[knobs.tile_platform]
+type    = "int"
+indexes = "tileset"
+min     = 1
+max     = 255
+doc     = "The middle tile of a floating ledge."
+
+[knobs.tile_platform_l]
+type    = "int"
+indexes = "tileset"
+min     = 1
+max     = 255
+doc     = "The left end cap of a floating ledge."
+
+[knobs.tile_platform_r]
+type    = "int"
+indexes = "tileset"
+min     = 1
+max     = 255
+doc     = "The right end cap of a floating ledge."
+
+[knobs.tile_bg]
+type    = "int"
+indexes = "tileset"
+default = 0
+min     = 0
+max     = 255
+doc     = "A non-solid tile drawn behind the open air. 0 leaves the air empty and shows bg_color through it."
+
+
+# ============================================================================
+# Binding to a spriteset
+#
+# `indexes = "spriteset"` is bounded against `base .. base + sprites - 1` of the
+# pack the recipe chose -- `hero` sits at base 64, so a sprite knob set to 3
+# names a tile in the TILESET's half of the sheet and the runner is drawn as a
+# lump of rock. That is the same mistake as an out-of-range tile index, one pack
+# along.
+#
+# The five knobs in this section WITHOUT the field are the near misses named in
+# the tileset section above: `sprite_run_frames` (a count), `sprite_cells_w` and
+# `sprite_cells_h` (a frame's size in cells), `sprite_offset_x` and
+# `sprite_offset_y` (pixel offsets, which are negative here). The three
+# `*_frame_shift` knobs are shift amounts. None of them names a cell.
+#
+# WHAT THIS STILL DOES NOT CATCH: only the knob's own value is bounded, and
+# `sprite_run` is the base of `sprite_run_frames` consecutive cells. A base one
+# cell inside the pack whose run cycle runs off the end of it is not seen here.
+# ============================================================================
+
+[knobs.sprite_idle]
+type    = "int"
+indexes = "spriteset"
+min     = 0
+max     = 255
+doc     = "The first of two idle frames. The engine alternates between it and the next index."
+
+[knobs.sprite_run]
+type    = "int"
+indexes = "spriteset"
+min     = 0
+max     = 255
+doc     = "The first frame of the run cycle. sprite_run_frames follow it consecutively."
+
+[knobs.sprite_run_frames]
+type    = "int"
+default = 4
+min     = 1
+max     = 16
+doc     = "How many frames the run cycle has."
+
+[knobs.sprite_jump]
+type    = "int"
+indexes = "spriteset"
+min     = 0
+max     = 255
+doc     = "Shown while rising."
+
+[knobs.sprite_fall]
+type    = "int"
+indexes = "spriteset"
+min     = 0
+max     = 255
+doc     = "Shown while falling."
+
+[knobs.sprite_hurt]
+type    = "int"
+indexes = "spriteset"
+min     = 0
+max     = 255
+doc     = "Shown for the length of death_frames after a death."
+
+[knobs.sprite_crawler]
+type    = "int"
+indexes = "spriteset"
+min     = 0
+max     = 255
+doc     = "The first of two crawler frames."
+
+[knobs.sprite_gem]
+type    = "int"
+indexes = "spriteset"
+min     = 0
+max     = 255
+doc     = "The pickup."
+
+[knobs.sprite_cells_w]
+type    = "int"
+default = 1
+min     = 1
+max     = 4
+doc     = "How many 8x8 cells wide a runner frame is."
+
+[knobs.sprite_cells_h]
+type    = "int"
+default = 2
+min     = 1
+max     = 4
+doc     = "How many 8x8 cells tall a runner frame is. Cell n and cell n+16 for a two-cell sprite."
+
+[knobs.sprite_offset_x]
+type    = "int"
+default = -1
+min     = -16
+max     = 16
+doc     = "Where the sprite sits relative to the collision box, in pixels."
+
+[knobs.sprite_offset_y]
+type    = "int"
+default = -2
+min     = -16
+max     = 16
+doc     = "Where the sprite sits relative to the collision box, in pixels."
+
+[knobs.run_frame_shift]
+type    = "int"
+default = 2
+min     = 0
+max     = 6
+doc     = "Frames per run frame, as a power of two: 2 advances the cycle every 4 frames."
+
+[knobs.idle_frame_shift]
+type    = "int"
+default = 5
+min     = 0
+max     = 8
+doc     = "Frames per idle frame, as a power of two. 5 is a breath every half second."
+
+[knobs.crawler_frame_shift]
+type    = "int"
+default = 3
+min     = 0
+max     = 8
+doc     = "Frames per crawler frame, as a power of two."
+
+
+# ============================================================================
+# Presentation
+# ============================================================================
+
+[knobs.bg_color]
+type = "int"
+min  = 0
+max  = 15
+doc  = "The colour behind everything: the live palette slot gfx.cls is given."
+
+[knobs.hud_color]
+type    = "int"
+default = 6
+min     = 0
+max     = 15
+doc     = "The colour of the gem and death counters."
+
+[knobs.camera_smooth]
+type    = "fixed"
+default = 0.25
+min     = 0.03125
+max     = 1.0
+doc     = "Fraction of the distance to its target the camera closes each frame. 1.0 is a rigid camera."
+
+[knobs.camera_lookahead]
+type    = "int"
+default = 14
+min     = -64
+max     = 64
+doc     = "Pixels the camera leads the player by, in the direction they face."
+
+[knobs.camera_offset_y]
+type    = "int"
+default = -10
+min     = -64
+max     = 64
+doc     = "Pixels the camera sits above the player's centre, so there is more sky than floor on screen."
+
+
+# ============================================================================
+# Sound
+# ============================================================================
+
+[knobs.sfx_jump]
+type    = "int"
+default = 0
+min     = 0
+max     = 63
+doc     = "Effect id played on a jump."
+
+[knobs.sfx_hurt]
+type    = "int"
+default = 1
+min     = 0
+max     = 63
+doc     = "Effect id played on a death."
+
+[knobs.sfx_gem]
+type    = "int"
+default = 2
+min     = 0
+max     = 63
+doc     = "Effect id played when a gem is collected."

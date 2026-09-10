@@ -1,0 +1,16 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.DS_Store
+
+# Ad-hoc CLI output. `sq1 build <dir>` writes <dir>.cart next to the source, and
+# those are build artifacts - the recipe is the thing under version control.
+*.cart
+
+# `tools/shot.ts` output. Looking at a frame is part of the work; keeping the
+# picture is not - conformance/cases/ is where an image becomes evidence.
+shots/
+
+# Conformance data is normative and committed deliberately.
+!conformance/**/*.cart
+!conformance/fixtures/*.bin

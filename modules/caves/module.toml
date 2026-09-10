@@ -1,0 +1,117 @@
+# `caves` -- 64 tiles of rock, dirt, ledges, spikes, lava and clutter.
+#
+# HOW TO CHANGE IT
+# ----------------
+# Edit the art in gen.mjs -- one hex digit per pixel, one string per row -- and
+# then regenerate:
+#
+#     node modules/caves/gen.mjs
+#
+# tiles.bin is OUTPUT. Never edit it: a .bin cannot be reviewed, and a pixel
+# changed there and not in gen.mjs is lost the next time anyone regenerates.
+#
+# THE FILE FORMAT
+# ---------------
+#     bytes 0..2047     pixels, 32 rows of 64 bytes, in the console's own sheet
+#                       layout: 128 pixels per row at 4bpp, EVEN x in the LOW
+#                       nibble. Four sheet rows of sixteen cells = 64 tiles.
+#     bytes 2048..2111  flags, one byte per tile, in tile order.
+#
+# The stamper copies the pixels into the sprite sheet starting at cell `base`
+# and the flags to SPRITE_FLAGS + base. With base = 0 both are straight copies.
+#
+# TILE 0 IS EMPTY AND IS NEVER DRAWN. That is the console's rule, not this
+# pack's: gfx.map skips tile 0 whatever the sheet holds there, because a map is
+# mostly nothing and blitting 8x8 transparent pixels for every nothing is how a
+# frame gets spent. Tile 0 here is blank and carries no flags.
+#
+# DRAWN FOR the `sweetie16` palette. See that pack for what each digit means.
+
+[module]
+kind    = "tileset"
+name    = "caves"
+version = "1.0.0"
+
+[provides]
+tiles  = 64
+tile_w = 8
+tile_h = 8
+# The sheet cell this pack starts at. 0 is the top-left of the sheet, so the
+# tile index a map cell holds is also the sprite index the console draws.
+base   = 0
+data   = "tiles.bin"
+
+# The flags this pack marks, and the SPRITE_FLAGS bit each one uses. An engine
+# that requires `flags = ["solid", "hazard"]` is asking for exactly this table.
+flags      = ["solid", "hazard"]
+solid_flag  = 1
+hazard_flag = 2
+
+# What every index is. Advisory: the bytes in tiles.bin are the truth, and this
+# is here so a person writing a recipe -- or a tool offering completion for one
+# -- does not have to open the art to find out which tile is the floor.
+[names]
+empty          = 0
+rock           = 1
+rock_cracked   = 2
+rock_top       = 3
+rock_top_left  = 4
+rock_top_right = 5
+rock_left      = 6
+rock_right     = 7
+rock_bottom    = 8
+rock_bot_left  = 9
+rock_bot_right = 10
+rock_pillar    = 11
+rock_top_worn  = 12
+dirt           = 13
+dirt_stones    = 14
+dirt_top       = 15
+dirt_left      = 16
+dirt_right     = 17
+dirt_bottom    = 18
+ledge_left     = 19
+ledge_mid      = 20
+ledge_right    = 21
+ledge_single   = 22
+spikes_up      = 23
+spikes_down    = 24
+spikes_left    = 25
+spikes_right   = 26
+lava_top       = 27
+lava           = 28
+acid_top       = 29
+acid           = 30
+crystal_small  = 31
+crystal_large  = 32
+crystal_gold   = 33
+ore            = 34
+stalactite     = 35
+stalagmite     = 36
+mushroom_small = 37
+mushroom_large = 38
+vine           = 39
+vine_end       = 40
+skull          = 41
+pebbles        = 42
+torch          = 43
+chain          = 44
+ladder         = 45
+moss_patch     = 46
+bg_brick       = 47
+bg_brick_crack = 48
+bg_dark        = 49
+bg_dark_fleck  = 50
+bg_pillar_left = 51
+bg_pillar_right = 52
+bg_conduit     = 53
+bg_rubble      = 54
+bg_moss        = 55
+bg_mist        = 56
+rock_crystal   = 57
+rock_moss      = 58
+rock_slope_l   = 59
+rock_slope_r   = 60
+crystal_cluster = 61
+marker         = 62
+checker        = 63

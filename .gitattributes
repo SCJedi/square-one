@@ -1,0 +1,14 @@
+# Generated and normative artifacts must survive a checkout unchanged. Line-ending
+# translation on a file whose bytes are the specification would turn a determinism
+# test into a platform test.
+*.bin       binary
+*.cart      binary
+*.sq1c      binary
+
+# Generated sources are compared byte-for-byte by the reproducibility CI job.
+packages/core/src/sin-table.ts  text eol=lf
+
+# Token fixtures are normative input; their exact bytes are what gets counted.
+conformance/tokens/*.js         text eol=lf
+
+* text=auto eol=lf

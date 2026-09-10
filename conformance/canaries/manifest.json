@@ -1,0 +1,157 @@
+{
+  "01-read-math.js": {
+    "attempt": "read the Math namespace",
+    "expect": "undefined"
+  },
+  "02-read-date.js": {
+    "attempt": "read Date, for a wall clock",
+    "expect": "undefined"
+  },
+  "03-read-fetch.js": {
+    "attempt": "reach the network with fetch",
+    "expect": "undefined"
+  },
+  "04-read-globalthis.js": {
+    "attempt": "name the global object directly",
+    "expect": "undefined"
+  },
+  "05-read-self.js": {
+    "attempt": "name the global object by its worker alias, and postMessage with it",
+    "expect": "undefined"
+  },
+  "06-read-window-document.js": {
+    "attempt": "reach the page the player is on",
+    "expect": "undefined"
+  },
+  "07-read-process-require.js": {
+    "attempt": "find Node: process, require, module, global, Buffer",
+    "expect": "undefined"
+  },
+  "08-read-settimeout.js": {
+    "attempt": "schedule work off the tick with timers, microtasks or promises",
+    "expect": "undefined"
+  },
+  "09-read-crypto-performance.js": {
+    "attempt": "find entropy and a high-resolution clock",
+    "expect": "undefined"
+  },
+  "10-read-importscripts-worker.js": {
+    "attempt": "load more code into this realm, or start a fresh unscrubbed one",
+    "expect": "undefined"
+  },
+  "11-read-websocket-xhr.js": {
+    "attempt": "the network by its other names",
+    "expect": "undefined"
+  },
+  "12-read-weakref-gc.js": {
+    "attempt": "observe the garbage collector",
+    "expect": "undefined"
+  },
+  "13-read-intl-sab-atomics.js": {
+    "attempt": "locale, shared memory, and a timer built out of them",
+    "expect": "undefined"
+  },
+  "14-this-binding.js": {
+    "attempt": "get the global object out of `this`, at the top level and in a plain call",
+    "expect": "undefined"
+  },
+  "15-call-eval.js": {
+    "attempt": "eval a string",
+    "expect": "throws",
+    "note": "a strict-mode function may not have a parameter named eval; the nested sloppy/strict bootstrap in sandbox.ts is what shadows it anyway"
+  },
+  "16-new-function.js": {
+    "attempt": "compile a string with the Function constructor, named directly",
+    "expect": "throws",
+    "note": "only this spelling is closed by Layer 1 -- see 25"
+  },
+  "17-reflect-get-global.js": {
+    "attempt": "Reflect.get(globalThis, \"fetch\")",
+    "expect": "throws"
+  },
+  "18-proxy-abi.js": {
+    "attempt": "wrap an ABI object in a Proxy",
+    "expect": "throws"
+  },
+  "19-arguments-callee.js": {
+    "attempt": "walk the call stack through arguments.callee",
+    "expect": "throws",
+    "note": "strict mode poisons callee with a throwing accessor; the throw IS the defence"
+  },
+  "20-deliberate-throw.js": {
+    "attempt": "nothing -- a cart that is simply broken, on purpose",
+    "expect": "throws"
+  },
+  "21-peek-poke-bounds.js": {
+    "attempt": "peek and poke outside the 64 KB",
+    "expect": "harmless",
+    "note": "machine.ts defines out-of-range peek as 0 and out-of-range poke as a no-op: a cart with an off-by-one must draw a wrong picture, not kill the machine"
+  },
+  "22-error-stack-sniff.js": {
+    "attempt": "read the host's stack trace out of an Error",
+    "expect": "harmless",
+    "note": "an information leak, not a capability: on V8 the string carries the runtime's frames and, in a dev build, absolute paths. Layer 2 sets Error.stackTraceLimit = 0. Nothing at Layer 1 can close it.",
+    "closedBy": "scrubRealm"
+  },
+  "23-abi-tamper.js": {
+    "attempt": "park state on the ABI objects and replace an ABI method",
+    "expect": "harmless",
+    "note": "not an escape -- a determinism hole. State on `sys` survives a restore, because restore copies RAM and cannot see a property on an object. machine.ts should freeze the api objects; see the README.",
+    "closedBy": "unclosed: machine.ts does not freeze the api objects yet"
+  },
+  "24-storage-and-console.js": {
+    "attempt": "persistent storage and host I/O",
+    "expect": "undefined"
+  },
+  "25-function-constructor.js": {
+    "attempt": "(function(){}).constructor(\"return this\")()",
+    "expect": "known-hole",
+    "note": "the canonical escape. Parameter shadowing hides names; this expression uses none. Open on Layers 0+1 and the reason Layer 2 exists.",
+    "closedBy": "scrubRealm"
+  },
+  "26-intrinsic-constructor-walk.js": {
+    "attempt": "the same escape spelled through [].constructor, \"\".constructor, Object.constructor and an object literal",
+    "expect": "known-hole",
+    "note": "shadowing Object and Array would not help: the last spelling starts from a literal and needs no name at all",
+    "closedBy": "scrubRealm"
+  },
+  "27-getprototypeof-walk.js": {
+    "attempt": "climb the prototype chain from values the machine handed the cart, including gfx.cls",
+    "expect": "known-hole",
+    "note": "starts from a value the ABI gave away, so no amount of care about ABI contents closes it",
+    "closedBy": "scrubRealm"
+  },
+  "28-async-generator-constructors.js": {
+    "attempt": "the AsyncFunction, GeneratorFunction and AsyncGeneratorFunction constructors",
+    "expect": "known-hole",
+    "note": "three more compilers on three more prototypes; a sandbox that neuters only Function.prototype.constructor has closed one door of four",
+    "closedBy": "scrubRealm"
+  },
+  "29-constructed-dynamic-import.js": {
+    "attempt": "reach dynamic import through a Function-constructed body",
+    "expect": "known-hole",
+    "note": "Layer 0 rejects the import keyword in cart source, but a string handed to the Function constructor is not cart source. The canary obtains the compiler and deliberately never calls it.",
+    "closedBy": "scrubRealm"
+  },
+  "30-intrinsic-mutation.js": {
+    "attempt": "modify a shared intrinsic prototype",
+    "expect": "known-hole",
+    "note": "writes a unique marker rather than overwriting Array.prototype.push, because the runner shares this realm. The harness deletes the marker afterwards.",
+    "closedBy": "scrubRealm"
+  },
+  "31-dynamic-import.js": {
+    "attempt": "import a module from cart source",
+    "expect": "compile-error",
+    "note": "import() is syntax, not a name, so it is refused at token level before anything is compiled"
+  },
+  "33-wrapper-injection.js": {
+    "attempt": "close the sandbox's own wrapper and run code in its sloppy outer scope",
+    "expect": "compile-error",
+    "note": "found while writing this suite. A sloppy scope gives a plain call's `this` as the real global, and no Function constructor is involved, so Layer 2 would not have closed it. compileCart now compiles every source on its own as a strict function body first: a complete FunctionBody has balanced braces and cannot close one it did not open. The file is deliberately not valid JavaScript on its own."
+  },
+  "32-control-live-global.js": {
+    "attempt": "NOT AN ESCAPE -- the control. Run through a doctored ABI that really does hand it a live global.",
+    "expect": "control",
+    "note": "the only assertion in the suite that fails when the harness stops working rather than when the sandbox does"
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "name": "square-one",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Square One - a 128x128 virtual console and its cart format",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:slow": "cross-env SQ1_SLOW=1 vitest run",
+    "typecheck": "tsc -b",
+    "gen:sin": "node --experimental-strip-types packages/core/tools/gen-sin.ts",
+    "gen:golden": "vite-node packages/runtime/tools/gen-golden.ts",
+    "check:golden": "vite-node packages/runtime/tools/gen-golden.ts -- --check",
+    "verify:m2": "vite-node tools/verify-m2.ts",
+    "sq1": "vite-node packages/cli/src/bin.ts --"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.0",
+    "@vitest/browser": "^2.1.9",
+    "cross-env": "^7.0.3",
+    "esbuild": "^0.24.0",
+    "playwright": "^1.63.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

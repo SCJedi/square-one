@@ -1,0 +1,113 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Nightly, for the slow property runs.
+    - cron: "0 6 * * *"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Node. The everyday gate. Fast suite, every supported Node, both OSes we
+  # actually develop on.
+  # ---------------------------------------------------------------------------
+  node:
+    name: node ${{ matrix.node }} / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        node: ["20", "22", "24"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+  # ---------------------------------------------------------------------------
+  # Browsers. This is not decoration: the whole point of the numeric core is
+  # that it produces identical results on every engine. Chrome and Firefox use
+  # different JITs and different math libraries, so a divergence here is exactly
+  # the class of bug that would silently desync replays in the field.
+  #
+  # Browser deps are installed in-job rather than in package.json so a local
+  # `npm install` stays small. At M1 this job also runs the frame-hash chain.
+  # ---------------------------------------------------------------------------
+  browser:
+    name: browser / ${{ matrix.browser }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      # @vitest/browser must stay pinned to the same major as vitest itself.
+      # Installing it unpinned resolves to the next major and npm reports the
+      # peer conflict as "Cannot read properties of null (reading 'explain')",
+      # which says nothing about the actual cause. It lives in devDependencies
+      # so `npm ci` gets the locked, matching version.
+      - run: npm ci
+      - run: npx playwright install --with-deps ${{ matrix.browser }}
+      - run: npx vitest run --config vitest.browser.config.ts
+        env:
+          SQ1_BROWSER: ${{ matrix.browser }}
+
+  # ---------------------------------------------------------------------------
+  # The slow gate. One million random pairs against the BigInt reference.
+  # Too slow for every commit, too important to run only when someone remembers.
+  # ---------------------------------------------------------------------------
+  slow:
+    name: slow property suite
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - run: npm test
+        env:
+          SQ1_SLOW: "1"
+
+  # ---------------------------------------------------------------------------
+  # Generated artifacts must be reproducible. If regenerating the sine table or
+  # the golden frame-hash chains changes a byte, either a generator is
+  # nondeterministic or someone hand-edited a file that says not to.
+  #
+  # This is the gate that catches determinism drift the moment it is introduced,
+  # rather than months later when a replay in the archive stops working.
+  # ---------------------------------------------------------------------------
+  reproducible:
+    name: generated artifacts are stable
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - run: npm run gen:sin
+      - run: npm run gen:golden
+      - name: fail if regeneration changed anything
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "Regenerating produced different bytes:"
+            git --no-pager diff --stat
+            git --no-pager diff -- conformance/ | head -40
+            exit 1
+          fi

@@ -1,0 +1,739 @@
+# The `topdown` engine.
+#
+# A top-down action-adventure core: eight-directional movement with a facing
+# that persists, two-axis tile collision on a map with no notion of ground, a
+# camera that eases in both axes and clamps on all four edges, a swing with a
+# hitbox in the facing direction, two enemy behaviours, pickups, and a key that
+# opens a door. It ships no art and no level data. Everything it draws comes
+# from the packs a recipe pairs it with, and everything it feels like comes from
+# the knobs below.
+#
+# THE RULE THIS FILE FOLLOWS: if a number in engine.js could reasonably be
+# different in another game, it is a knob here. There are no magic numbers left
+# in the engine except the machine's own -- 8 pixels to a tile, 128 to a screen.
+#
+# A knob with no `default` is REQUIRED: the recipe must set it, and the stamper
+# refuses the build if it does not. Everything that binds the engine to a
+# particular art pack is required, because there is no sensible default for
+# "which tile is the grass".
+#
+# THERE ARE 86 KNOBS AND 24 OF THEM ARE REQUIRED. That is not a complaint, but
+# it is a measurement, and modules/topdown/INTERFACE-NOTES.md is where it is
+# discussed: eighteen of the required ones exist only to name an index in
+# somebody else's art pack. Each of those eighteen carries `indexes`, so the
+# stamper bounds it against the pack the recipe actually chose rather than
+# against the 0 .. 255 a byte allows. Naming the cell is still the recipe's job;
+# naming a cell the pack does not have is no longer a build.
+
+[module]
+kind    = "engine"
+name    = "topdown"
+version = "1.0.0"
+
+[provides]
+# The size of the entity pool in USER_RAM. Entity 0 is always the player; the
+# rest are filled by the world generator. This is the ceiling; the `entities`
+# knob says how many of them a given game actually uses.
+entities = 32
+
+[requires]
+# A palette pack, so the art has sixteen colours to mean something by.
+palette   = true
+# A tileset with at least 64 tiles that marks solid, hazard AND door. `door` is
+# the one a platformer never asks for: it marks a tile the engine can OPERATE,
+# replacing it in the map with `tile_door_open`. The engine reads the three flags
+# out of SPRITE_FLAGS and does not care what the art is.
+#
+# NOTE WHAT THIS CANNOT SAY, and see INTERFACE-NOTES.md: it asks for the flag
+# NAMES, and the bit each name uses still has to be copied into `solid_flag`,
+# `hazard_flag` and `door_flag` by hand in the recipe.
+tileset   = { min_tiles = 64, flags = ["solid", "hazard", "door"] }
+# A spriteset with at least twenty cells: eight of walk cycle, four of swing,
+# two enemies of two frames each, and two pickups. Which index is which is bound
+# by the sprite_* knobs -- and the ORDER of the walk block (down, up, left,
+# right) is a contract this line cannot express.
+spriteset = { min_sprites = 20 }
+# Sound is optional. The engine calls snd.sfx with the ids below; with no
+# soundbank those effects are silent, which is not an error.
+soundbank = false
+
+
+# ============================================================================
+# Feel -- how the walker moves
+# ============================================================================
+
+[knobs.move_speed]
+type    = "fixed"
+default = 0.85
+min     = 0.05
+max     = 8.0
+doc     = "Pixels per frame along one axis. The single number that decides how brisk the game feels."
+
+[knobs.diagonal_scale]
+type    = "fixed"
+default = 0.7071
+min     = 0.1
+max     = 1.5
+doc     = "Speed multiplier while two directions are held. 0.7071 makes a diagonal cost the same as a straight line; 1.0 is the bug every top-down game ships once."
+
+[knobs.face_prefer_x]
+type    = "bool"
+default = true
+doc     = "On a diagonal, which axis names the facing. True faces east or west while moving up-right; false faces north."
+
+[knobs.attack_move_scale]
+type    = "fixed"
+default = 0.35
+min     = 0.0
+max     = 1.0
+doc     = "Speed retained while a swing is playing. 0.0 roots the walker for the whole animation; 1.0 removes the commitment a swing is supposed to cost."
+
+
+# ============================================================================
+# Bodies
+# ============================================================================
+
+[knobs.player_width]
+type    = "int"
+default = 6
+min     = 1
+max     = 32
+doc     = "The walker's collision box width in pixels. Usually narrower than the sprite, so shoulders do not catch on doorways."
+
+[knobs.player_height]
+type    = "int"
+default = 6
+min     = 1
+max     = 32
+doc     = "The walker's collision box height in pixels. Seen from above this is depth, not height."
+
+[knobs.enemy_width]
+type    = "int"
+default = 6
+min     = 1
+max     = 32
+doc     = "Collision box width of a pool enemy, chaser and patroller alike."
+
+[knobs.enemy_height]
+type    = "int"
+default = 6
+min     = 1
+max     = 32
+doc     = "Collision box height of a pool enemy."
+
+[knobs.pickup_size]
+type    = "int"
+default = 8
+min     = 1
+max     = 32
+doc     = "The square a coin or a key is picked up within. A whole cell is generous on purpose: a pickup you walked over and did not get is worse than one you got from a pixel away."
+
+[knobs.entities]
+type    = "int"
+default = 32
+min     = 2
+max     = 32
+doc     = "How many entity slots this game uses, out of the pool the engine provides. Slot 0 is the walker, and slots 1 and 2 are the keep's coin and key."
+
+
+# ============================================================================
+# The swing, and being hit
+# ============================================================================
+
+[knobs.attack_frames]
+type    = "int"
+default = 12
+min     = 1
+max     = 120
+doc     = "How long the swing sprite shows, and how long the walker is slowed by it. Damage lands on the first frame only."
+
+[knobs.attack_reach]
+type    = "int"
+default = 10
+min     = 1
+max     = 64
+doc     = "How far the hitbox extends from the walker's near face, in pixels, and how far the swing sprite is drawn out."
+
+[knobs.attack_width]
+type    = "int"
+default = 8
+min     = 1
+max     = 64
+doc     = "The hitbox's other dimension. Wider forgives a diagonal approach; narrower makes facing matter."
+
+[knobs.attack_damage]
+type    = "int"
+default = 1
+min     = 1
+max     = 255
+doc     = "Health taken off an enemy by one swing."
+
+[knobs.enemy_hp]
+type    = "int"
+default = 2
+min     = 1
+max     = 255
+doc     = "Health an enemy spawns with. Two means every enemy is two swings, which is the difference between a fight and a formality."
+
+[knobs.hit_flash_frames]
+type    = "int"
+default = 12
+min     = 0
+max     = 120
+doc     = "How long a struck enemy blinks. It is also the window during which it cannot be struck again, so a swing cannot be spammed into a kill."
+
+[knobs.knockback]
+type    = "fixed"
+default = 2.5
+min     = 0.0
+max     = 16.0
+doc     = "Pixels an enemy is shoved by a hit, resolved through the collision routine so a shove into a wall stops at the wall."
+
+[knobs.player_hp]
+type    = "int"
+default = 6
+min     = 1
+max     = 255
+doc     = "Hearts the walker starts and respawns with. At zero the run restarts at the start tile."
+
+[knobs.hurt_invuln_frames]
+type    = "int"
+default = 48
+min     = 0
+max     = 255
+doc     = "Frames of invulnerability bought by being hit. Zero means standing in a chaser empties the bar in six frames."
+
+[knobs.use_reach]
+type    = "int"
+default = 7
+min     = 1
+max     = 32
+doc     = "How far in front of the walker's centre the B button looks for a door, in pixels."
+
+
+# ============================================================================
+# What lives in the world
+# ============================================================================
+
+[knobs.chaser_speed]
+type    = "fixed"
+default = 0.42
+min     = 0.0
+max     = 8.0
+doc     = "How fast a chaser closes, in pixels per frame per axis. Above move_speed it cannot be outrun."
+
+[knobs.chase_range]
+type    = "int"
+default = 56
+min     = 0
+max     = 512
+doc     = "How close the walker must be for a chaser to notice, as |dx| + |dy| in pixels. A diamond rather than a circle, because a circle costs a multiply and nobody can tell."
+
+[knobs.patrol_speed]
+type    = "fixed"
+default = 0.3
+min     = 0.0
+max     = 8.0
+doc     = "How fast a patroller walks its line. It never chases and never looks."
+
+
+# ============================================================================
+# The world
+# ============================================================================
+
+[knobs.level_seed]
+type = "int"
+min  = 0
+max  = 2147483647
+doc  = "The whole world is a pure function of this number. Change it and you get a different overworld; ship it and every player gets the same one."
+
+[knobs.map_width]
+type    = "int"
+default = 64
+min     = 16
+max     = 128
+doc     = "World width in tiles. The console's map is 128 x 64, and a top-down world wants to be square."
+
+[knobs.map_height]
+type    = "int"
+default = 64
+min     = 16
+max     = 64
+doc     = "World height in tiles."
+
+[knobs.wall_chance]
+type    = "int"
+default = 20
+min     = 0
+max     = 100
+doc     = "Percent of four-tile chunks that are a rock outcrop. The outcrop fills the chunk's inner 3 x 3, so the lanes between chunks stay open however high this goes."
+
+[knobs.water_chance]
+type    = "int"
+default = 14
+min     = 0
+max     = 100
+doc     = "Percent of chunks that are a pond. Rolled after wall_chance out of the same hundred, so the two together must stay under 100."
+
+[knobs.tree_chance]
+type    = "int"
+default = 34
+min     = 0
+max     = 100
+doc     = "Percent of open chunks growing a tree."
+
+[knobs.flower_chance]
+type    = "int"
+default = 30
+min     = 0
+max     = 100
+doc     = "Percent of open chunks with a patch of flowers. Decoration, and the only thing here that changes nothing."
+
+[knobs.bramble_chance]
+type    = "int"
+default = 16
+min     = 0
+max     = 100
+doc     = "Percent of open chunks with a bramble. Brambles are hazard tiles and are NOT solid: you may walk into one, and you will regret it."
+
+[knobs.coin_chance]
+type    = "int"
+default = 30
+min     = 0
+max     = 100
+doc     = "Percent of open chunks with a coin in them."
+
+[knobs.key_chance]
+type    = "int"
+default = 10
+min     = 0
+max     = 100
+doc     = "Percent of open chunks with a loose key. The keep's own key is placed regardless of this."
+
+[knobs.chaser_chance]
+type    = "int"
+default = 18
+min     = 0
+max     = 100
+doc     = "Percent of open chunks that spawn a chaser."
+
+[knobs.patroller_chance]
+type    = "int"
+default = 18
+min     = 0
+max     = 100
+doc     = "Percent of open chunks that spawn a patroller."
+
+[knobs.start_tile_x]
+type = "int"
+min  = 1
+max  = 126
+doc  = "Where the walker starts and respawns, in tiles. Its chunk and the eight around it are forced to open ground."
+
+[knobs.start_tile_y]
+type = "int"
+min  = 1
+max  = 62
+doc  = "The start row, in tiles."
+
+[knobs.edge_solid]
+type    = "bool"
+default = true
+doc     = "Treat everything outside the map as wall. Unlike a platformer this applies on all four sides, because there is no bottom to fall out of."
+
+[knobs.keep_x]
+type = "int"
+min  = 1
+max  = 126
+doc  = "Left column of the keep -- the walled rectangle with the locked door. It is written over whatever the generator put there, so put it somewhere away from the start."
+
+[knobs.keep_y]
+type = "int"
+min  = 1
+max  = 62
+doc  = "Top row of the keep."
+
+[knobs.keep_w]
+type    = "int"
+default = 9
+min     = 3
+max     = 32
+doc     = "Keep width in tiles. The door goes in the middle of the bottom wall, so an odd number centres it."
+
+[knobs.keep_h]
+type    = "int"
+default = 7
+min     = 3
+max     = 32
+doc     = "Keep height in tiles."
+
+
+# ============================================================================
+# Binding to a tileset
+#
+# The three *_flag knobs are the workaround this milestone found: the tileset
+# declares `solid_flag = 1` in its own [provides], and there is no way for the
+# engine to read it. See INTERFACE-NOTES.md.
+#
+# `indexes = "tileset"` marks a knob whose value is a CELL OF THE SHEET the
+# tileset fills, so the stamper bounds it against that pack's own size rather
+# than against the 0 .. 255 a byte allows. INTERFACE-NOTES.md finding 2 measured
+# what its absence cost: `tile_door = 200` against a 64-tile pack stamped, proved
+# a 600-frame chain, and shipped a keep whose door is empty air. Every one of the
+# twelve `tile_*` knobs below carries it, because `engine.js` passes every one of
+# them to `setTile`.
+#
+# IT IS WRITTEN OUT RATHER THAN GUESSED FROM THE NAME, and the four knobs
+# directly below are why. `solid_flag`, `hazard_flag` and `door_flag` are BIT
+# numbers and `draw_layer` is a bit MASK; a name-based rule would bound all four
+# against a tile count and refuse a manifest that is correct.
+# ============================================================================
+
+[knobs.solid_flag]
+type    = "int"
+default = 1
+min     = 1
+max     = 255
+doc     = "The SPRITE_FLAGS bit a tileset uses for `solid`. Copy it from the tileset's [provides]."
+
+[knobs.hazard_flag]
+type    = "int"
+default = 2
+min     = 1
+max     = 255
+doc     = "The SPRITE_FLAGS bit a tileset uses for `hazard`."
+
+[knobs.door_flag]
+type    = "int"
+default = 4
+min     = 1
+max     = 255
+doc     = "The SPRITE_FLAGS bit a tileset uses for `door` -- a tile a key opens."
+
+[knobs.draw_layer]
+type    = "int"
+default = 0
+min     = 0
+max     = 255
+doc     = "Layer mask passed to gfx.map. 0 draws every tile; a non-zero value draws only tiles whose flags intersect it."
+
+[knobs.tile_grass]
+type    = "int"
+indexes = "tileset"
+min     = 1
+max     = 255
+doc     = "The ground everything else sits on."
+
+[knobs.tile_grass_alt]
+type    = "int"
+indexes = "tileset"
+min     = 1
+max     = 255
+doc     = "A second ground tile, mixed in per tile so a field is not one flat colour."
+
+[knobs.tile_flower]
+type    = "int"
+indexes = "tileset"
+min     = 1
+max     = 255
+doc     = "Pure decoration on open ground. Give it a tile with no flags."
+
+[knobs.tile_wall]
+type    = "int"
+indexes = "tileset"
+min     = 1
+max     = 255
+doc     = "The solid tile an outcrop, the world's rim and the keep's walls are made of."
+
+[knobs.tile_wall_top]
+type    = "int"
+indexes = "tileset"
+min     = 1
+max     = 255
+doc     = "The tile laid along the top row of any wall -- the one lit from above. Give it the capped tile and a wall stops looking like a hole."
+
+[knobs.tile_water]
+type    = "int"
+indexes = "tileset"
+min     = 1
+max     = 255
+doc     = "The body of a pond. Solid: a moat is a wall you can see the bottom of."
+
+[knobs.tile_shore]
+type    = "int"
+indexes = "tileset"
+min     = 1
+max     = 255
+doc     = "The top row of a pond, where the water meets the ground."
+
+[knobs.tile_tree]
+type    = "int"
+indexes = "tileset"
+min     = 1
+max     = 255
+doc     = "A solid tile standing on open ground."
+
+[knobs.tile_bramble]
+type    = "int"
+indexes = "tileset"
+min     = 1
+max     = 255
+doc     = "A hazard tile that is NOT solid, so the walker can choose to take the damage. Give it a hazard-flagged tile or nothing in this game will ever hurt except the enemies."
+
+[knobs.tile_door]
+type    = "int"
+indexes = "tileset"
+min     = 1
+max     = 255
+doc     = "The keep's locked door. It must carry the tileset's `door` flag, or the B button will find nothing to open."
+
+[knobs.tile_door_open]
+type    = "int"
+indexes = "tileset"
+min     = 1
+max     = 255
+doc     = "What a door becomes once a key has been spent on it. It must be neither solid nor a door, or the walker cannot walk through and could pay twice."
+
+[knobs.tile_floor]
+type    = "int"
+indexes = "tileset"
+min     = 1
+max     = 255
+doc     = "The floor inside the keep, so the inside reads as indoors."
+
+
+# ============================================================================
+# Binding to a spriteset
+#
+# `sprite_walk` is the base of a block of four directions of `sprite_walk_frames`
+# frames each, `sprite_dir_stride` apart, in the order down, up, left, right.
+# Nothing in the manifest format can state that order, which is why it is stated
+# here in prose. See INTERFACE-NOTES.md.
+#
+# `indexes = "spriteset"` is bounded against `base .. base + sprites - 1` of the
+# pack the recipe chose -- `wanderer` sits at base 64, so `sprite_walk = 3` names
+# a grass tile in the TILESET's half of the sheet and the walker is drawn as a
+# tuft of grass. That build is the second half of INTERFACE-NOTES.md finding 2,
+# and it is now refused. The six knobs carrying the field are the six this file's
+# `engine.js` hands to `gfx.spr`: sprite_walk, sprite_slash, sprite_chaser,
+# sprite_patroller, sprite_coin, sprite_key.
+#
+# THE NEAR MISSES IN THIS SECTION, none of which names a cell:
+#   sprite_dir_stride   cells BETWEEN two directions' blocks -- a stride, and a
+#                       legal one is far smaller than the smallest legal index.
+#   sprite_walk_frames  a count of frames.
+#   sprite_offset_x/y   pixel offsets, and negative by default.
+#   walk_frame_shift    shift amounts, in a power of two.
+#   enemy_frame_shift
+# Bounding any of them against the spriteset would refuse `wanderer`, which is
+# correct art -- a stride of 2 is not cell 2. That is why the field is explicit
+# rather than inferred from the `sprite_` prefix.
+#
+# WHAT THIS STILL DOES NOT CATCH: only the knob's own value is bounded, and
+# `sprite_walk` is the base of `4 * sprite_dir_stride` cells. A base that sits
+# inside the pack while the last direction's frames run off the end of it is not
+# seen here, and neither is the order the four directions are in.
+# ============================================================================
+
+[knobs.sprite_walk]
+type    = "int"
+indexes = "spriteset"
+min     = 0
+max     = 255
+doc     = "The first cell of the walk block: direction 0 (down), frame 0."
+
+[knobs.sprite_dir_stride]
+type    = "int"
+default = 2
+min     = 1
+max     = 16
+doc     = "Cells between one direction's frames and the next's. Equal to sprite_walk_frames for a tightly packed block."
+
+[knobs.sprite_walk_frames]
+type    = "int"
+default = 2
+min     = 1
+max     = 16
+doc     = "Frames in one direction's walk cycle. Frame 0 is also the standing pose."
+
+[knobs.sprite_slash]
+type    = "int"
+indexes = "spriteset"
+min     = 0
+max     = 255
+doc     = "The first of four swing cells, one per direction, in the same order as the walk block."
+
+[knobs.sprite_chaser]
+type    = "int"
+indexes = "spriteset"
+min     = 0
+max     = 255
+doc     = "The first of two chaser frames."
+
+[knobs.sprite_patroller]
+type    = "int"
+indexes = "spriteset"
+min     = 0
+max     = 255
+doc     = "The first of two patroller frames."
+
+[knobs.sprite_coin]
+type    = "int"
+indexes = "spriteset"
+min     = 0
+max     = 255
+doc     = "The pickup that counts."
+
+[knobs.sprite_key]
+type    = "int"
+indexes = "spriteset"
+min     = 0
+max     = 255
+doc     = "The pickup that opens a door."
+
+[knobs.sprite_offset_x]
+type    = "int"
+default = -1
+min     = -16
+max     = 16
+doc     = "Where a sprite sits relative to its collision box, in pixels."
+
+[knobs.sprite_offset_y]
+type    = "int"
+default = -2
+min     = -16
+max     = 16
+doc     = "Where a sprite sits relative to its collision box, in pixels."
+
+[knobs.walk_frame_shift]
+type    = "int"
+default = 3
+min     = 0
+max     = 8
+doc     = "Walked pixels per walk frame, as a power of two: 3 advances the cycle every 8 steps. The counter is steps and not frames, so a walker who stops mid-stride stands still."
+
+[knobs.enemy_frame_shift]
+type    = "int"
+default = 3
+min     = 0
+max     = 8
+doc     = "Frames per enemy animation frame, as a power of two."
+
+
+# ============================================================================
+# Presentation
+# ============================================================================
+
+[knobs.bg_color]
+type = "int"
+min  = 0
+max  = 15
+doc  = "The colour behind everything: the live palette slot gfx.cls is given. Only visible past the rim of the map."
+
+[knobs.hud_color]
+type    = "int"
+default = 6
+min     = 0
+max     = 15
+doc     = "The colour of the health, key, coin and hurt counters."
+
+[knobs.camera_smooth]
+type    = "fixed"
+default = 0.1875
+min     = 0.03125
+max     = 1.0
+doc     = "Fraction of the distance to its target the camera closes each frame, on both axes. 1.0 is a rigid camera."
+
+[knobs.camera_lookahead]
+type    = "int"
+default = 12
+min     = -64
+max     = 64
+doc     = "Pixels the camera leads the walker by, in the direction they face. It is a whole direction here rather than a sign, so it leads north and south too."
+
+[knobs.minimap_show]
+type    = "bool"
+default = true
+doc     = "Draw the minimap. It is what a scrolling world owes the player in place of a room grid; turn it off for a game about being lost."
+
+[knobs.minimap_x]
+type    = "int"
+default = 92
+min     = 0
+max     = 127
+doc     = "Left edge of the minimap, in screen pixels."
+
+[knobs.minimap_y]
+type    = "int"
+default = 2
+min     = 0
+max     = 127
+doc     = "Top edge of the minimap, in screen pixels."
+
+[knobs.minimap_size]
+type    = "int"
+default = 32
+min     = 4
+max     = 128
+doc     = "The minimap is this many pixels square, sampling the whole map into it. Cheapest when it divides map_width and map_height."
+
+[knobs.minimap_wall_color]
+type    = "int"
+default = 3
+min     = 0
+max     = 15
+doc     = "Live palette slot for a solid tile on the minimap."
+
+[knobs.minimap_floor_color]
+type    = "int"
+default = 7
+min     = 0
+max     = 15
+doc     = "Live palette slot for everything else on the minimap."
+
+[knobs.minimap_player_color]
+type    = "int"
+default = 13
+min     = 0
+max     = 15
+doc     = "Live palette slot for the dot that is you."
+
+
+# ============================================================================
+# Sound
+# ============================================================================
+
+[knobs.sfx_slash]
+type    = "int"
+default = 0
+min     = 0
+max     = 63
+doc     = "Effect id played on a swing."
+
+[knobs.sfx_hit]
+type    = "int"
+default = 1
+min     = 0
+max     = 63
+doc     = "Effect id played when a swing connects."
+
+[knobs.sfx_hurt]
+type    = "int"
+default = 2
+min     = 0
+max     = 63
+doc     = "Effect id played when the walker takes damage."
+
+[knobs.sfx_pickup]
+type    = "int"
+default = 3
+min     = 0
+max     = 63
+doc     = "Effect id played when a coin or key is collected."
+
+[knobs.sfx_door]
+type    = "int"
+default = 4
+min     = 0
+max     = 63
+doc     = "Effect id played when a key opens a door."
