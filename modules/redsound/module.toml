@@ -43,23 +43,26 @@
 # WHICH ENGINE KNOB POINTS AT WHICH EFFECT
 # ----------------------------------------
 # The numbering here is the one modules/FORMATS-breakout-art.md fixes, and the
-# format owns it. `breakout@1.0.0`'s six knobs default to 0..5, which is a
-# straight run rather than that table, so THREE OF THE SIX MUST BE SET by any
-# recipe pairing these two modules:
+# format owns it. `breakout@1.0.0` is numbered against the same table, so every
+# one of its seventeen `sfx_*` defaults is already correct and a recipe pairing
+# these two modules SETS NOTHING. The same holds for the seven music knobs:
+# `music_a/b/c` default to patterns 0, 2 and 4, which is what this bank ships.
 #
-#     sfx_hit    = 0     block hit and survived         -- default is right
-#     sfx_break  = 1     block breaks                   -- default is right
-#     sfx_paddle = 2     ball returned by the paddle    -- default is right
-#     sfx_drop   = 5     drop caught          (default 3 is the WALL hit)
-#     sfx_shoot  = 7     shot fired           (default 4 is the drop appearing)
-#     sfx_lose   = 13    ball out of play     (default 5 is the drop caught)
+# That was not true when this bank was written. The engine then had six sound
+# knobs defaulting to a straight run of 0..5, so three pointed at the wrong
+# effect -- and ten of the seventeen effects, INCLUDING THE ALARM, had no knob to
+# fire them at all. The alarm is the only warning a player gets before a red ball
+# destroys their paddle, and nothing could play it. The engine gained the eleven
+# missing knobs and their call sites afterwards.
 #
-# TEN OF THE SEVENTEEN EFFECTS HAVE NO KNOB TO POINT AT THEM, including the
-# alarm, which is the most important sound in the game. `breakout@1.0.0` calls
-# `snd.sfx` from seven places and none of them is the ball turning red, the beam
-# deflecting it, a wall bounce, a level clearing or a game ending. That is the
-# honest state of the engine and it is not this module's file to fix; README.md
-# names the knobs and call sites it would need.
+# The music was a second instance of the same shape and outlived the first: this
+# module shipped 48 bytes of it, the chunk reached RAM, the synth could play it,
+# and `engine.js` never called `snd.music`. No test caught it, because a test
+# cannot hear silence. A player could, in about ninety seconds.
+#
+# Worth keeping in mind for the next pack: SHIPPING THE BYTES IS NOT WIRING THEM
+# UP, and a manifest that describes what an engine ought to do is a claim with
+# nothing checking it.
 
 [module]
 kind    = "soundbank"

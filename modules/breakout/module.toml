@@ -15,7 +15,7 @@
 # in engine.js except the machine's own (128 pixels to a screen, 16 subpixels to
 # a pixel because that is the unit the header speaks).
 #
-# NONE OF THE 83 KNOBS IS REQUIRED, which is the opposite of `topdown`'s
+# NONE OF THE 90 KNOBS IS REQUIRED, which is the opposite of `topdown`'s
 # 86-with-24-required and worth a sentence. A required knob is the right shape
 # for something an engine CANNOT DRAW WITHOUT -- there is no sensible default
 # for "which tile is the floor". This engine can always draw: pair it with a
@@ -35,10 +35,11 @@
 #
 # The near-miss column of that table is the rest of this manifest. `max_fx` is a
 # COUNT of effect slots, `fx_frames` a DURATION, `red_flash` and `beam_flow` and
-# `drop_spin` are PERIODS in frames, every `*_color` is a LIVE PALETTE SLOT and
-# every `sfx_*` is a soundbank id. Annotating any of them would bound a period
-# against a cell count: a check that refuses a correct manifest, which is worse
-# than the absent check it replaced.
+# `drop_spin` are PERIODS in frames, every `*_color` is a LIVE PALETTE SLOT,
+# every `sfx_*` is a soundbank effect id and `music_a`, `music_b` and `music_c`
+# are soundbank PATTERN ids -- a pattern is a bar of music, not a sheet cell.
+# Annotating any of them would bound a period against a cell count: a check that
+# refuses a correct manifest, which is worse than the absent check it replaced.
 
 [module]
 kind    = "engine"
@@ -766,3 +767,79 @@ default = 16
 min     = 0
 max     = 63
 doc     = "Effect id for a side pad charging a shot. It fires once per arrival, the same as the ammunition does, so parking on a pad is silent."
+
+
+# ============================================================================
+# The song
+#
+# THREE BANDS, AND THE BAND IS THE DIFFICULTY CURVE. A soundbank ships one short
+# loop per band and plays it faster as the game gets harder; the engine holds
+# WHEN to change band and never what a band sounds like. `modules/redsound`
+# writes two bars a band, loops each one on itself, and starts them with
+# patterns 0, 2 and 4 over levels 1-3, 4-7 and 8-10 -- which is what these seven
+# defaults are, so a recipe pairing that bank sets none of them.
+#
+# THE PATTERN IDS ARE NOT HARD-CODED IN engine.js for the same reason the
+# `sfx_*` ids are not: a different bank numbers its patterns differently, and
+# the engine holds mechanics while the pack holds content. The two level numbers
+# are knobs for the same reason the `mech_*` numbers are -- a pack with fifteen
+# levels wants its bands somewhere else.
+#
+# THE ENGINE RESTARTS THE SONG ONLY WHEN THE BAND CHANGES. A two-bar loop clipped
+# at every level says nothing the HUD's level number has not already said, and
+# the one-byte band it compares against lives in RAM at 0x7914, so a rewind
+# restores the music with the game.
+#
+# NONE OF THESE CARRIES `indexes`. A pattern id is a bar of music in a
+# soundbank, not a cell in a sprite sheet; `sprite_base` is still the only
+# annotated knob in this manifest.
+# ============================================================================
+
+[knobs.music_a]
+type    = "int"
+default = 0
+min     = -1
+max     = 254
+doc     = "Pattern the FIRST band starts at: the levels up to music_level_b. The band is expected to loop on itself, so the engine starts it once and lets it run. -1 plays nothing, which is how a recipe pairs a bank of effects that ships no music."
+
+[knobs.music_b]
+type    = "int"
+default = 2
+min     = -1
+max     = 254
+doc     = "Pattern the SECOND band starts at, from music_level_b up to music_level_c. In a bank built like `redsound` it is the same two bars a step faster, which is the difficulty curve the player hears."
+
+[knobs.music_c]
+type    = "int"
+default = 4
+min     = -1
+max     = 254
+doc     = "Pattern the LAST band starts at, from music_level_c onward."
+
+[knobs.music_level_b]
+type    = "int"
+default = 4
+min     = 1
+max     = 40
+doc     = "The level the second band takes over on, counted the way the HUD counts levels: 1 is the first. Set it above level_count and the second band never plays."
+
+[knobs.music_level_c]
+type    = "int"
+default = 8
+min     = 1
+max     = 40
+doc     = "The level the last band takes over on, counted the same way. Keep it at or above music_level_b: the engine tests music_level_c first, so a lower value simply hides the second band."
+
+[knobs.music_mask]
+type    = "int"
+default = 12
+min     = 0
+max     = 15
+doc     = "Which channels the song may use, one bit each. The default is the two the engine leaves alone -- 2 and 3 -- because the block, break, paddle and wall effects fire on 0 and 1 many times a second and a song there would be shredded. An effect that claims a music channel TAKES it and the song drops that voice until the pattern turns over, which is what makes the alarm and the game-over cue land on channel 3."
+
+[knobs.music_fade]
+type    = "int"
+default = 30
+min     = 0
+max     = 255
+doc     = "Frames the band takes to come up to full volume when it starts, in the sequencer's own integer fade. 0 starts it at full. Half a second lets level one's theme arrive under the serve rather than cutting in, and lets a new band swell in over the level-clear fanfare."

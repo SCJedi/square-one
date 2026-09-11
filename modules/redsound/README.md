@@ -221,43 +221,68 @@ noise.
 ## Wiring it to the engine
 
 The effect numbering is the one `modules/FORMATS-breakout-art.md` fixes, and that
-file owns it. `breakout@1.0.0`'s six sound knobs default to a straight run 0..5,
-which is not that table, so **a recipe pairing these two modules must set three
-of the six**:
+file owns it. **`breakout@1.0.0` now defaults every one of its seventeen `sfx_*`
+knobs to that table**, so a recipe pairing these two modules sets none of them
+and hears the right effect for every event. The defaults were once a straight run
+0..5, which lined up with nothing — `sfx_drop` pointed at the wall hit — and a
+default that is a plausible number rather than the right number is worse than no
+default, because nothing is wrong enough to notice.
 
-```toml
-sfx_hit    = 0     # default is right
-sfx_break  = 1     # default is right
-sfx_paddle = 2     # default is right
-sfx_drop   = 5     # default 3 is the WALL hit
-sfx_shoot  = 7     # default 4 is the drop appearing
-sfx_lose   = 13    # default 5 is the drop caught
-```
-
-### Ten of the seventeen effects have no knob to point at them
-
-`breakout@1.0.0` calls `snd.sfx` from seven places, and among them are none of
-the events this bank's most important effects exist for. **The alarm cannot be
-played by the engine as it stands.** This is not this module's file to fix; what
-the engine would need is:
-
-| effect | needs | where in `engine.js` | channel |
+| effect | knob | fires when | channel |
 |---|---|---|---|
-| 3 wall hit | knob `sfx_wall` | `bounce()` — a wall, the ceiling and the beam all pass through it | 1 |
-| 4 drop appears | knob `sfx_drop_out` | where a broken block spawns a drop | 2 |
-| **10 ball turns RED** | knob `sfx_red` | `damage()`, where a type-4 block sets bit 1 | 3 |
-| **11 beam deflects** | knob `sfx_deflect` | the beam branch, beside `bounce(b, 1)` | 3 |
-| **12 paddle destroyed** | knob `sfx_red_hit` | `redHit()` — today it shares `sfx_lose` with a merely lost ball | 3 |
-| 8 shot hits a shield | knob `sfx_shield_tick` | the shot-versus-type-6 branch | 2 |
-| 9 shield breaks | knob `sfx_shield_break` | the same branch, on the killing shot | 2 |
-| 14 level cleared | knob `sfx_clear` | where the level advances | 3 |
-| 15 game over | knob `sfx_over` | where lives reach zero | 3 |
-| 16 side pad charged | knob `sfx_charge` | the side-pad contact test | 2 |
+| 0 | `sfx_hit` | a block is hit and survives | 1 |
+| 1 | `sfx_break` | a block breaks | 1 |
+| 2 | `sfx_paddle` | the paddle returns a ball | 0 |
+| 3 | `sfx_wall` | a side wall or the ceiling — `edge()`, not `bounce()` | 1 |
+| 4 | `sfx_spawn` | a drop appears out of a broken block | 2 |
+| 5 | `sfx_drop` | a drop is caught | 2 |
+| 6 | `sfx_life` | the **extra life** is caught | 2 |
+| 7 | `sfx_shoot` | a shot is fired | 2 |
+| 8 | `sfx_ping` | a shielded block holds | 2 |
+| 9 | `sfx_shield` | a shielded block breaks | 2 |
+| **10** | `sfx_red` | **the ball turns RED**, in `damage()` | 3 |
+| **11** | `sfx_deflect` | the beam catches it | 3 |
+| **12** | `sfx_smash` | the paddle is destroyed, in `redHit()` | 3 |
+| 13 | `sfx_lose` | a ball falls out of the world | 3 |
+| 14 | `sfx_clear` | a level is cleared, the last one included | 3 |
+| 15 | `sfx_over` | the last life goes | 3 |
+| 16 | `sfx_charge` | a side pad charges a shot | 2 |
 
 **Channel 3 is the important channel.** Putting the alarm and the deflection both
 on it is deliberate: the deflection cuts the alarm off mid-warble, which is
 exactly what happened. Effect 12 and effect 13 belong there for the same reason —
-whatever is playing, the player needs to hear that they lost.
+whatever is playing, the player needs to hear that they lost — and effect 15
+takes the channel from effect 13 a frame later, which is why a player hears "life
+lost" on every life except the last.
+
+### The song, and the three knobs that place its bands
+
+The engine starts the music in `loadLevel`, so it begins under level one's serve,
+and **it changes band and only changes band**: a two-bar loop restarted at every
+level would be clipped three times on the way to level 4. `breakout`'s seven
+music knobs default to this module's own table, so again a recipe sets none of
+them:
+
+```toml
+music_a       = 0     # band A, levels 1-3
+music_b       = 2     # band B, levels 4-7
+music_c       = 4     # band C, levels 8-10
+music_level_b = 4     # the level band B takes over on, as the HUD counts levels
+music_level_c = 8     # and band C
+music_mask    = 12    # channels 2 and 3, the `music_mask` in module.toml
+music_fade    = 30    # half a second of fade-in when a band starts
+```
+
+`music_a = -1` is a bank that ships effects and no music; the engine reads that
+straight through to `snd.music(-1, ...)`, which plays nothing.
+
+**The song is never stopped**, not for a lost life and not for game over, because
+this bank is mixed for exactly that: an effect claiming a music channel takes it
+and the song drops that voice until the pattern turns over. Effects 13, 12 and 15
+are all on channel 3, so each plays over a continuing melody with the bass out
+from under it for its length — 800 ms for the alarm, about a second for the game
+over. Silencing the track under the cue would cost the mix the thing that makes
+the cue land.
 
 ## What this machine cannot do
 

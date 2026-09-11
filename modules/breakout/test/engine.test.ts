@@ -161,6 +161,12 @@ const MF = VALUES.get("max_fx") as number;
 const FXF = VALUES.get("fx_frames") as number;
 const SB = VALUES.get("sprite_base") as number;
 const RED_FLASH = VALUES.get("red_flash") as number;
+const MUS_A = VALUES.get("music_a") as number;
+const MUS_B = VALUES.get("music_b") as number;
+const MUS_C = VALUES.get("music_c") as number;
+const MUS_LEVEL_B = VALUES.get("music_level_b") as number;
+const MUS_LEVEL_C = VALUES.get("music_level_c") as number;
+const MUSIC_MASK = VALUES.get("music_mask") as number;
 
 // ---------------------------------------------------------------------------
 // The fixture chunks, built from modules/FORMATS-breakout.md.
@@ -324,9 +330,62 @@ const SOUND = planCartData([
   { type: "SFX ", data: sfxChunk() },
 ]).data;
 
-/** One channel's 16-byte register block, and the sequencer byte inside it. */
+// ---------------------------------------------------------------------------
+// AND A MUSIC BANK, built the same way and for the same reason.
+//
+// Six patterns, three bands of two bars, shaped exactly as `modules/redsound`
+// shapes its own: a pattern claims channels 2 and 3 with a voice each, the
+// first bar of a band carries LOOP_START and the second LOOP_END, so a band is
+// a self-contained loop started with one `snd.music` call.
+//
+// The voices are slots 17..28 of the fixture bank above -- 32 steps at 255
+// frames, longer than any test here runs -- which makes the pattern the
+// sequencer is on STAND STILL for the length of a test. That is the property
+// these assertions need: `musicPattern()` is then "the band that was started",
+// not "wherever a sequencer that ran out of notes has wandered to".
+// ---------------------------------------------------------------------------
+
+const MUS_PATTERNS = 6;
+
+function musChunk(): Uint8Array {
+  const p = new Uint8Array(MUS_PATTERNS * 8);
+  for (let n = 0; n < MUS_PATTERNS; n++) {
+    const o = n * 8;
+    // A pattern byte is `sfx id + 1`; 0 would mean "leave that channel alone".
+    p[o + 2] = 17 + n * 2 + 1; // channel 2: this bar's lead
+    p[o + 3] = 18 + n * 2 + 1; // channel 3: this bar's bass
+    p[o + 4] = n & 1 ? 0x02 : 0x01; // FLAGS: LOOP_START, then LOOP_END
+  }
+  return p;
+}
+
+const MUSIC = planCartData([
+  { type: "MAP ", data: mapChunk() },
+  { type: "DATA", data: dataChunk() },
+  { type: "SFX ", data: sfxChunk() },
+  { type: "MUS ", data: musChunk() },
+]).data;
+
+/** One channel's 16-byte register block, and the sequencer bytes inside it. */
 const CH_STRIDE = 16;
+const CH_CTRL = 0x0;
 const CH_SEQ_SFX = 0xc;
+const CH_SEQ_TICK = 0xe;
+
+/**
+ * The music sequencer's own state, quoted from packages/runtime/src/audio.ts:
+ * 255 patterns of 8 bytes at 0x7000, then eight bytes of live position.
+ */
+const MUS_STATE = ADDR.MUSIC + 255 * 8;
+const MUS_FLAGS = 0;
+const MUS_PATTERN = 1;
+const MUS_MASK = 2;
+const MUS_PLAYING = 0x01;
+
+/** Who is driving a channel: 0 the cart, 1 an effect, 2 the song. */
+function owner(m: Machine, ch: number): number {
+  return (m.ram[ADDR.AUDIO_CH + ch * CH_STRIDE + CH_CTRL]! & 0x30) >> 4;
+}
 
 // ---------------------------------------------------------------------------
 // The engine's RAM, quoted from the block comment at the top of engine.js.
@@ -347,6 +406,7 @@ const G_DRIFT = S + 12;
 const G_ROWS = S + 16;
 const G_DEAD = S + 18;
 const G_ART = S + 19;
+const G_BAND = S + 20;
 const G_BALLS = S + 24;
 const G_DROPS = G_BALLS + MB * 10;
 const G_SHOTS = G_DROPS + MD * 4;
@@ -423,9 +483,34 @@ function bootSnd(): Machine {
   return m;
 }
 
+/** The same cart with effects AND music installed. */
+function bootMus(): Machine {
+  const m = createMachine(compileCart(SOURCE, { name: "breakout" }), { data: MUSIC });
+  m.boot(1);
+  return m;
+}
+
 /** A knob's value by name, for the sfx table below. */
 function sfxId(name: string): number {
   return VALUES.get(name) as number;
+}
+
+/** The pattern the song is on, or -1 when nothing is playing. */
+function musicPattern(m: Machine): number {
+  if ((m.ram[MUS_STATE + MUS_FLAGS]! & MUS_PLAYING) === 0) return -1;
+  return m.ram[MUS_STATE + MUS_PATTERN]!;
+}
+
+/**
+ * How far the song's lead voice has left to run in its current step.
+ *
+ * THIS IS HOW A TEST HEARS A RESTART. The fixture's voices are 255 frames to a
+ * step, so this counts steadily down while a band plays and JUMPS BACK UP the
+ * moment `snd.music` re-arms the channel. A band that was not restarted has a
+ * strictly smaller number than it had a frame ago.
+ */
+function songTick(m: Machine): number {
+  return m.ram[ADDR.AUDIO_CH + 2 * CH_STRIDE + CH_SEQ_TICK]!;
 }
 
 /**
@@ -1441,6 +1526,152 @@ describe("sound", () => {
 });
 
 // ===========================================================================
+// The song.
+//
+// THE BUG THIS SUITE MISSED FOR A WHOLE PASS. Seventeen effects were wired and
+// every one of them was tested; nothing ever called `snd.music`, so the cart
+// shipped with sound and no music, and every test above passed because no test
+// can hear silence. The sequencer's position is in RAM at 0x77F8 exactly like
+// an effect's is in the channel registers, so music is as readable as a blit --
+// what was missing was an assertion, not a mechanism.
+// ===========================================================================
+
+describe("the song", () => {
+  it("starts the song at boot, before the player has pressed anything", () => {
+    const m = bootMus();
+
+    // Boot does not tick the audio sequencer, so this is the call itself,
+    // landing in the sequencer's state: `snd.music` writes RAM and nothing else.
+    expect(m.ram[MUS_STATE + MUS_FLAGS]! & MUS_PLAYING, "a song is playing").toBe(MUS_PLAYING);
+    expect(musicPattern(m), "the first band's pattern").toBe(MUS_A);
+    expect(m.ram[G_BAND], "and the engine's own band byte, in RAM above 0x7900").toBe(1);
+
+    // One tick later the sequencer has put the band's two voices on the air.
+    run(m, 1);
+    expect(owner(m, 2), "the song owns its lead").toBe(2);
+    expect(owner(m, 3), "and its bass").toBe(2);
+    expect(playing(m, 2), "with a voice sounding on each").toBeGreaterThanOrEqual(0);
+    expect(playing(m, 3)).toBeGreaterThanOrEqual(0);
+
+    // It begins under level one's serve rather than waiting for a launch: this
+    // cart has no attract screen, the field is up and the paddle already moves.
+    expect(m.ram[G_LEVEL]).toBe(0);
+    expect(m.ram[ball(0) + B_F]! & 4, "the first ball is still on the paddle").toBe(4);
+  });
+
+  it("plays the band the level belongs to, and changes band where the bank says", () => {
+    // modules/redsound: three bands over levels 1-3, 4-7 and 8-10, started with
+    // patterns 0, 2 and 4. The engine holds WHEN, never what a band sounds like,
+    // so both halves of that table are knobs -- and these are their defaults.
+    const want: number[] = [];
+    for (let L = 1; L <= LEVEL_COUNT; L++) {
+      want.push(L >= MUS_LEVEL_C ? MUS_C : L >= MUS_LEVEL_B ? MUS_B : MUS_A);
+    }
+    expect(want, "levels 1-3, 4-7, 8-10").toEqual([
+      MUS_A, MUS_A, MUS_A, MUS_B, MUS_B, MUS_B, MUS_B, MUS_C, MUS_C, MUS_C,
+    ]);
+
+    const m = field(bootMus());
+    movePaddle(m, 0);
+    const got = [musicPattern(m)];
+    for (let L = 1; L < LEVEL_COUNT; L++) {
+      m.ram.fill(0, G_BLOCKS, G_BLOCKS + GW * GH); // even the keeper block
+      run(m, 1);
+      expect(m.ram[G_LEVEL], `cleared into level ${L + 1}`).toBe(L);
+      got.push(musicPattern(m));
+    }
+    expect(got, "one band per difficulty step").toEqual(want);
+  });
+
+  it("does not restart the band on a level that stays inside it", () => {
+    // A band is two bars. Clipping it at every level would say nothing the level
+    // number in the HUD has not already said, three times on the way to level 4.
+    const m = field(bootMus());
+    movePaddle(m, 0);
+    run(m, 20);
+    const before = songTick(m);
+    m.ram.fill(0, G_BLOCKS, G_BLOCKS + GW * GH);
+    run(m, 1);
+    expect(m.ram[G_LEVEL], "level two").toBe(1);
+    expect(musicPattern(m), "the same band").toBe(MUS_A);
+    expect(m.ram[G_BAND], "and the same band byte").toBe(1);
+    expect(songTick(m), "the same run of it, never restarted").toBeLessThan(before);
+
+    // Which only means something if a band that DOES change restarts. Level 3
+    // is the last of the first band, so clearing it crosses into the second.
+    m.ram[G_LEVEL] = MUS_LEVEL_B - 2;
+    const mid = songTick(m);
+    m.ram.fill(0, G_BLOCKS, G_BLOCKS + GW * GH);
+    run(m, 1);
+    expect(m.ram[G_LEVEL], "the first level of the second band").toBe(MUS_LEVEL_B - 1);
+    expect(musicPattern(m), "a different band").toBe(MUS_B);
+    expect(m.ram[G_BAND]).toBe(2);
+    expect(songTick(m), "started from the top of its first bar").toBeGreaterThan(mid);
+  });
+
+  it("claims the channels the bank asks for, and leaves the engine its own", () => {
+    // `music_mask = 12` in modules/redsound/module.toml: channels 2 and 3. The
+    // block, break, paddle and wall effects fire on 0 and 1 many times a second
+    // and a song under a rally would be shredded.
+    expect(MUSIC_MASK, "the mask redsound asks for").toBe(12);
+    expect(MUSIC_MASK & 3, "nothing of it on the engine's own two").toBe(0);
+
+    const m = field(bootMus());
+    movePaddle(m, 0);
+    run(m, 1);
+    expect(m.ram[MUS_STATE + MUS_MASK], "and it reached the sequencer").toBe(MUSIC_MASK);
+    expect(owner(m, 0), "channel 0 is the engine's").not.toBe(2);
+    expect(owner(m, 1), "and so is channel 1").not.toBe(2);
+    expect(owner(m, 2), "channel 2 is the song's").toBe(2);
+    expect(owner(m, 3), "and so is channel 3").toBe(2);
+
+    // A rally lands on 0 and 1 and the song does not notice.
+    setBlock(m, 5, 8, 1, 1);
+    tap(m);
+    expect(blockAt(m, 5, 8), "the block broke").toBe(0);
+    expect(playing(m, 1), "on the engine's channel").toBe(sfxId("sfx_break"));
+    expect(owner(m, 2), "with the song's lead still the song's").toBe(2);
+    expect(musicPattern(m), "and still the same band").toBe(MUS_A);
+  });
+
+  it("keeps playing through a lost life and a game over, under a cue that takes the bass", () => {
+    // The bank's mix note, in the engine: an effect that claims a music channel
+    // TAKES it, and the song drops that voice until the pattern turns over.
+    // Effect 15 is a slow fall on channel 3, which is the song's bass, and the
+    // composer chose that channel for it -- so the engine stops nothing, and
+    // what a player hears is the floor going out from under a melody that
+    // carries on.
+    const alive = field(bootMus());
+    movePaddle(alive, 0);
+    freeBall(alive, 100, 120, 0, SUB * 4);
+    run(alive, 10);
+    expect(alive.ram[G_LIVES], "a life gone").toBe(LIVES - 1);
+    expect(musicPattern(alive), "and the song still playing").toBe(MUS_A);
+    expect(owner(alive, 2), "on its lead").toBe(2);
+
+    const m = field(bootMus());
+    movePaddle(m, 0);
+    m.ram[G_LIVES] = 1;
+    freeBall(m, 100, 120, 0, SUB * 4);
+    run(m, 4);
+    expect(m.ram[G_STATE], "game over").toBe(1);
+    expect(playing(m, 3), "the cue is up").toBe(sfxId("sfx_over"));
+    expect(owner(m, 3), "holding the channel the bass was on").toBe(1);
+    expect(musicPattern(m), "and the song is still playing under it").toBe(MUS_A);
+    expect(owner(m, 2), "with its lead untouched").toBe(2);
+
+    // Pressing A starts the run again, and the song starts with it: `boot`
+    // clears the band byte, so the first band is a change of band once more.
+    const restart = songTick(m);
+    run(m, 1, BTN_A);
+    expect(m.ram[G_LEVEL], "back at level one").toBe(0);
+    expect(m.ram[G_LIVES]).toBe(LIVES);
+    expect(m.ram[G_BAND], "on the first band").toBe(1);
+    expect(songTick(m), "from the top of it").toBeGreaterThan(restart);
+  });
+});
+
+// ===========================================================================
 // The two draw paths.
 //
 // The engine picks between them at boot BY READING THE SHEET, so both halves
@@ -1859,6 +2090,76 @@ describe("state containment", () => {
     expect(a.heard, "sounds were actually playing during the run").toBeGreaterThan(0);
     expect(b.heard, "and the same ones, for the same frames").toBe(a.heard);
     expect(b.regs, "the audio registers come back identical").toEqual(a.regs);
+
+    let firstRam = -1;
+    for (let i = 0; i < a.ram.length && firstRam < 0; i++) if (a.ram[i] !== b.ram[i]) firstRam = i;
+    expect(firstRam, "first differing RAM byte after a restore").toBe(-1);
+  });
+
+  /**
+   * The same claim again with the SONG playing and the band already changed.
+   *
+   * "Which band is playing" is state, so it is one byte of RAM at `G_BAND` and
+   * not a module variable -- and the sequencer's own position is eight more at
+   * 0x77F8, inside the 64 KB and therefore inside a snapshot. A rewind that put
+   * the game back on level four and the music back on the first band would be a
+   * determinism hole with a soundtrack, so this leg is taken after a band
+   * change rather than on the band the engine started with.
+   */
+  it("rewinds byte-for-byte with the song playing and the band already switched", () => {
+    const m = bootMus();
+    for (let L = 0; L < 10; L++) {
+      m.ram[ADDR.USER_RAM + L * 16 + H_DROPR] = 200;
+      m.ram[ADDR.USER_RAM + L * 16 + H_DROPM] = 0x3f;
+      m.ram[ADDR.USER_RAM + L * 16 + H_DRIFT] = 4;
+      m.ram[ADDR.USER_RAM + L * 16 + H_PADS] = 1;
+      m.ram[ADDR.USER_RAM + L * 16 + H_AMMO] = 3;
+      m.ram[ADDR.USER_RAM + L * 16 + H_COUNT] = 2;
+    }
+
+    // Into the second band first: clear the last level of the first one.
+    m.ram[G_LEVEL] = MUS_LEVEL_B - 2;
+    m.ram.fill(0, G_BLOCKS, G_BLOCKS + GW * GH);
+    play(m, 0, 1);
+    expect(m.ram[G_BAND], "the band changed under the game").toBe(2);
+    expect(musicPattern(m), "onto the second band's pattern").toBe(MUS_B);
+    play(m, 1, 90);
+
+    const snap = m.snapshot();
+
+    /** One leg, counting the frames the song and the effects were sounding. */
+    const leg = (): { ram: Uint8Array; regs: Uint8Array; heard: number; sung: number } => {
+      const input = new Uint8Array(4);
+      let heard = 0;
+      let sung = 0;
+      for (let i = 0; i < 120; i++) {
+        input[0] = scripted(90 + i);
+        m.tick(input);
+        for (let c = 0; c < 4; c++) if (playing(m, c) >= 0) heard++;
+        if (musicPattern(m) >= 0) sung++;
+      }
+      return {
+        ram: m.snapshot(),
+        // The channel registers AND the sequencer's eight bytes of position.
+        regs: m.ram.slice(ADDR.AUDIO_CH, ADDR.AUDIO_CH + 4 * CH_STRIDE),
+        heard,
+        sung,
+      };
+    };
+
+    const a = leg();
+    m.restore(snap);
+    const b = leg();
+
+    expect(a.sung, "the song was playing across the whole run").toBe(120);
+    expect(b.sung, "and across the replay").toBe(120);
+    expect(a.heard, "with sounds over it").toBeGreaterThan(0);
+    expect(b.heard, "the same ones, for the same frames").toBe(a.heard);
+    expect(b.regs, "the audio registers come back identical").toEqual(a.regs);
+    expect(
+      m.ram.slice(MUS_STATE, MUS_STATE + 8),
+      "and so does the sequencer's own position",
+    ).toEqual(a.ram.slice(MUS_STATE, MUS_STATE + 8));
 
     let firstRam = -1;
     for (let i = 0; i < a.ram.length && firstRam < 0; i++) if (a.ram[i] !== b.ram[i]) firstRam = i;

@@ -138,6 +138,24 @@
 // effects -- `sfx_lose` and `sfx_smash`. They shared one knob once, and the
 // player could not tell from the sound which of the two had happened.
 //
+// AND THERE IS A SONG. `song()` starts it, from `loadLevel`, so it begins under
+// level one's serve rather than waiting for a launch: this cart has no attract
+// screen, the field is up and the paddle already moves, and a game that draws
+// on frame one should sound on frame one. It plays ONE BAND PER DIFFICULTY
+// STEP -- `music_a` up to `music_level_b`, `music_b` up to `music_level_c`,
+// `music_c` after -- and restarts only WHEN THE BAND CHANGES, because a bank's
+// band is a short loop and clipping it every level says nothing the HUD's level
+// number has not said already.
+//
+// IT KEEPS PLAYING THROUGH A LOST LIFE AND THROUGH GAME OVER, and that is the
+// mix the bank is written for: `music_mask` hands the song channels 2 and 3, an
+// effect that claims one TAKES it, and the song simply drops that voice until
+// the pattern turns over. So `sfx_lose`, `sfx_smash` and `sfx_over` -- all on
+// channel 3 -- play over a continuing melody with the bass out from under it
+// for their length, which is the sound of the floor going. Stopping the song
+// instead would cost a second of silence where the cue is, and the player
+// presses A into a track that never stopped.
+//
 // HOW TUNNELLING IS BOUNDED
 // -------------------------
 // `move()` splits one frame into `n = 1 + (m / (step_max * 16)) | 0` substeps,
@@ -185,6 +203,7 @@ var G_PADT = S + 15; // which side pads the paddle was touching last frame
 var G_ROWS = S + 16; // i16 bitmask: row r drifts when bit r is set
 var G_DEAD = S + 18; // frames of the paddle's destruction left to play
 var G_ART = S + 19; // 1 when the sheet holds a picture at sprite_base
+var G_BAND = S + 20; // the music band playing, + 1; 0 is a machine that is silent
 var G_BALLS = S + 24;
 
 // One ball is 10 bytes. FLAGS is bit 0 alive, bit 1 RED, bit 2 stuck to the
@@ -920,6 +939,33 @@ function driftStep() {
 }
 
 /**
+ * Play the band this level belongs to, AND ONLY WHEN THE BAND CHANGES.
+ *
+ * A bank ships one short loop per band and gets FASTER as the game gets harder
+ * -- that is the whole difficulty curve in the music -- so the engine holds
+ * WHEN to change band and never what a band sounds like. Three pattern ids and
+ * two level numbers are knobs for the same reason the `mech_*` numbers are: a
+ * different bank numbers its patterns differently and a different pack has a
+ * different curriculum.
+ *
+ * Restarting on every level would clip a two-bar loop three times in a row to
+ * say something the level number in the HUD has already said. The band is what
+ * changed, so the band is what restarts -- and G_BAND is RAM like everything
+ * else, so a rewind puts the song back where the game is.
+ */
+function song() {
+  var L = sys.peek(G_LEVEL) + 1;
+  var b = L >= KNOB.musicLevelC ? 3 : L >= KNOB.musicLevelB ? 2 : 1;
+  if (sys.peek(G_BAND) === b) return;
+  sys.poke(G_BAND, b);
+  snd.music(
+    b === 1 ? KNOB.musicA : b === 2 ? KNOB.musicB : KNOB.musicC,
+    KNOB.musicFade,
+    KNOB.musicMask,
+  );
+}
+
+/**
  * Read one level out of the DATA header and the MAP chunk. Nothing about a
  * level is generated, and nothing about it is hard-coded here.
  *
@@ -952,6 +998,11 @@ function loadLevel() {
   sys.poke(G_DDIR, 0);
   w16(G_DRIFT, 0);
   spawnBall();
+  // Every level starts here, boot's included, so this is the one call site the
+  // song needs: it begins under level one's serve and changes band from level
+  // to level. A life lost and a game over are both left alone -- see the note
+  // at the top of this file.
+  song();
 }
 
 // ============================================================================

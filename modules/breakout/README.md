@@ -135,10 +135,11 @@ before there was any art:
   value to `gfx.spr` or to `setTile`. This one goes to both `spr` and `sspr`.
   Nothing else here does: `max_fx` is a count, `fx_frames` a duration,
   `red_flash` / `beam_flow` / `drop_spin` are periods in frames, every `*_color`
-  is a live palette slot and every `sfx_*` a soundbank id — the near-miss table's
-  own second column, every one of them.
+  is a live palette slot, every `sfx_*` a soundbank effect id and `music_a` /
+  `music_b` / `music_c` soundbank **pattern** ids — the near-miss table's own
+  second column, every one of them. A pattern is a bar of music, not a cell.
 - **No knob is required.** A required knob is the right shape for something an
-  engine cannot draw without, and this one can always draw. All 83 have a
+  engine cannot draw without, and this one can always draw. All 90 have a
   defensible default, and a recipe may set as few as none.
 
 ---
@@ -199,6 +200,49 @@ player knows *which* of the three fired; doubling them up throws that away.
 With no soundbank in the recipe every one of these is silent, which is not an
 error.
 
+### The song
+
+**Three bands, one per difficulty step, and the band is the whole of the
+difficulty curve in the music.** A bank ships a short loop per band and plays it
+faster as the game gets harder, so what the engine holds is *when* to change
+band — never what a band sounds like.
+
+| knob | default | what it says |
+|---|---|---|
+| `music_a` | 0 | the pattern the first band starts at; `-1` plays nothing |
+| `music_b` | 2 | the second band's pattern |
+| `music_c` | 4 | the last band's pattern |
+| `music_level_b` | 4 | the level the second band takes over on, counted as the HUD counts levels |
+| `music_level_c` | 8 | the level the last band takes over on |
+| `music_mask` | 12 | the channels the song may use: 2 and 3 |
+| `music_fade` | 30 | frames the band takes to come up to full volume |
+
+Those defaults are [`../redsound`](../redsound)'s own table — patterns 0, 2 and 4
+over levels 1–3, 4–7 and 8–10 — so a recipe pairing that bank sets none of them,
+exactly as it sets none of the `sfx_*` knobs.
+
+Three things about it are decisions rather than mechanics, and each is a decision
+the other way round would have been defensible:
+
+- **It starts at boot**, in `loadLevel`, which `boot()` calls last. This cart has
+  no attract screen: the field is up, the paddle already slides and the first
+  ball is sitting on it waiting for A. A game that draws on frame one should
+  sound on frame one, and `music_fade` lets the theme arrive under the serve
+  rather than cutting in.
+- **It restarts only when the band changes.** A band is two bars. Clipping it at
+  every level would say nothing the level number in the HUD has not already said,
+  three times over on the way to level 4. "Which band is playing" is therefore
+  state, so it is one byte of RAM at `0x7914` — a rewind that restored the game
+  and not the band would be a determinism hole with a soundtrack.
+- **It keeps playing through a lost life and through game over.** `music_mask`
+  hands the song channels 2 and 3, and an effect that claims a music channel
+  **takes** it: the song drops that voice until the pattern turns over. So
+  `sfx_lose`, `sfx_smash` and `sfx_over` — all on channel 3 — play over a
+  continuing melody with the bass out from under it for their length, which is
+  the mix `redsound` is written for and is the sound of the floor going. Stopping
+  the song instead would put a second of silence exactly where the cue is, and
+  the player presses A into a track that never stopped.
+
 ---
 
 ## Animation
@@ -244,6 +288,7 @@ directly: two hundred frames of scripted play, and the 256 bytes from
        + 16   ROWS  (i16 bitmask: row r drifts when bit r is set)
        + 18   DEAD  frames of the paddle's destruction left to play
        + 19   ART   1 when the sheet holds a picture at sprite_base
+       + 20   BAND  the music band playing, + 1; 0 is a machine that is silent
        + 24   balls   max_balls x 10 bytes: x, y, vx, vy (i16), flags
        + ...  drops   max_drops x 4:  x, y (i16), kind + 1
        + ...  shots   max_shots x 3:  x, y, live
@@ -330,6 +375,21 @@ out of RAM the way `cellDrawn()` reads a blit out of the framebuffer. **An empty
 bank would not do**: a zero-length effect is released by the very next
 `tickAudio`, so every sound assertion would pass on an engine that played
 nothing.
+
+**The fixture music bank is six patterns shaped the way `redsound` shapes its
+own** — two bars a band, a voice on channels 2 and 3, `LOOP_START` on the first
+bar and `LOOP_END` on the second — built out of those same long effects, so the
+pattern the sequencer sits on stands still for the length of a test. The
+sequencer's position is eight bytes of RAM at `0x77F8`, so `musicPattern()` reads
+the song back out of the machine exactly as `playing()` reads an effect and
+`cellDrawn()` reads a blit, and `songTick()` — the lead voice's countdown inside
+its step — is how a test hears the difference between a band that **kept
+playing** and one that was restarted under it.
+
+**Music shipped once with no test that could hear it.** Seventeen effects were
+wired and asserted; nothing called `snd.music`, and every test passed, because no
+test can hear silence. That is why "the song" is a describe block of its own and
+why its first assertion is simply that *something is playing after boot*.
 
 Both paths are tested, and one test runs the same scenario down each of them and
 demands the same outcome: **the art is a skin and must never be a rule.**
