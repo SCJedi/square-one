@@ -1,0 +1,17 @@
+{
+  "name": "@sq1/prime",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Square One Prime: the deterministic simulation core, the display list, and the reference renderer. The simulation is normative; the picture is not.",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@sq1/core": "*"
+  },
+  "scripts": {
+    "test": "vitest run"
+  }
+}

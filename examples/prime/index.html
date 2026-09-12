@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Square One Prime &mdash; Red Breaker</title>
+    <!--
+      HOW TO OPEN THIS
+
+          npx vite                              (from the repository root)
+          then open  http://localhost:5173/examples/prime/index.html
+
+      Vite serves the TypeScript sources directly, so there is no build step and
+      nothing to stamp: the page imports `packages/prime/src/index.ts` and runs
+      the same code the tests do -- the real machine, the real PCG64-DXSM, the
+      real normative sin/cos, the real cart.
+
+      WHAT IT IS FOR. RED BREAKER, PLAYABLE. There is no placeholder here any
+      more: `breakoutCart` is the cart the suite tests and `createMachine` is the
+      simulation core. The three switches exist because a renderer that passes
+      every unit test and still looks wrong is the normal failure, and the only
+      instrument that catches it is a pair of eyes:
+
+        bloom          the glow pass. Off is the 1990s look.
+        shake          the screen offset. Off for anyone who wants less motion,
+                       and the player turns it off by itself when the system
+                       asks for reduced motion.
+        interpolation  THE BEST DEMONSTRATION IN THE PROJECT. Off presents the
+                       last simulated position instead of lerping toward the
+                       next, so a 60 Hz simulation steps on a 144 Hz display.
+                       Toggle it during a fast rally and watch the ball.
+        mute           the mixer's master. The simulation keeps running: sound
+                       is not simulation, and muting it changes nothing the
+                       conformance chain can see.
+
+      SOUND NEEDS ONE GESTURE. A browser will not start an AudioContext without
+      one, so the console says "press a key for sound" until you give it a key
+      or a click. That is the browser's rule, honestly reported, rather than a
+      page that looks fine and plays nothing.
+
+      CONTROLS.  left / right or A / D  move
+                 Z or SPACE             serve
+                 X                      fire, once you have ammunition
+                 ESC or P               pause  (the button is a real <button>)
+    -->
+    <style>
+      :root { color-scheme: dark; }
+      html, body { margin: 0; padding: 0; height: 100%; background: #05040a; }
+      #console { position: relative; width: 100%; height: 100dvh; height: 100vh; overflow: hidden; }
+      #hud {
+        position: fixed;
+        left: 14px;
+        bottom: 14px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 16px;
+        align-items: center;
+        padding: 10px 14px;
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        border-radius: 10px;
+        background: rgba(10, 8, 20, 0.72);
+        color: #cec8ea;
+        font: 500 12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        backdrop-filter: blur(6px);
+      }
+      #hud label { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+      #hud kbd {
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        border-radius: 4px;
+        padding: 1px 5px;
+        background: rgba(255, 255, 255, 0.06);
+      }
+      #hud :focus-visible { outline: 3px solid #8ab4ff; outline-offset: 2px; }
+      #sound { color: #8f88b8; }
+      #sound[data-on="1"] { color: #63e06b; }
+      #fail {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-content: center;
+        gap: 10px;
+        padding: 24px;
+        text-align: center;
+        color: #e4dff5;
+        font: 14px/1.6 ui-sans-serif, system-ui, sans-serif;
+      }
+      #fail[hidden] { display: none; }
+      code { background: #1a1630; padding: 2px 6px; border-radius: 4px; }
+    </style>
+  </head>
+  <body>
+    <div id="console"></div>
+
+    <div id="hud">
+      <strong>RED BREAKER</strong>
+      <label><input type="checkbox" id="bloom" checked /> bloom</label>
+      <label><input type="checkbox" id="shake" checked /> shake</label>
+      <label><input type="checkbox" id="lerp" checked /> interpolation</label>
+      <label><input type="checkbox" id="mute" /> mute</label>
+      <span id="sound" data-on="0">sound: waiting for a key</span>
+      <span
+        ><kbd>&larr;</kbd><kbd>&rarr;</kbd> move &middot; <kbd>Z</kbd> serve &middot;
+        <kbd>X</kbd> fire &middot; <kbd>Esc</kbd> pause</span
+      >
+    </div>
+
+    <div id="fail" hidden></div>
+
+    <script type="module">
+      import { breakoutCart, createPrimePlayer } from "../../packages/prime/src/index.ts";
+      import { createRenderer } from "../../packages/prime/src/render.ts";
+
+      const mount = document.getElementById("console");
+      const fail = document.getElementById("fail");
+
+      try {
+        const renderer = createRenderer({ document });
+
+        // =================================================================
+        // INTERPOLATION, ON A SWITCH
+        // =================================================================
+        // The player always hands the cart the correct `alpha`; this wrapper is
+        // what throws it away when the box is unchecked. Wrapping `render` here
+        // rather than teaching the cart about a global is the whole point -- the
+        // cart is the shipped one, unmodified, and the page cannot reach into
+        // the simulation even to demonstrate something about it.
+        let LERP = true;
+        const cart = {
+          boot: (sim, snd) => breakoutCart.boot(sim, snd),
+          tick: (sim, input, snd) => breakoutCart.tick(sim, input, snd),
+          render: (sim, draw, alpha) => breakoutCart.render(sim, draw, LERP ? alpha : 0),
+        };
+
+        const player = createPrimePlayer({ mount, cart, seed: 7n, renderer });
+
+        const bind = (id, fn) => {
+          const el = document.getElementById(id);
+          el.addEventListener("change", () => fn(el.checked));
+          return el;
+        };
+        bind("bloom", (on) => renderer.setPost({ bloom: on }));
+        bind("shake", (on) => renderer.setPost({ shake: on }));
+        bind("lerp", (on) => {
+          LERP = on;
+        });
+        bind("mute", (on) => {
+          player.muted = on;
+        });
+
+        // The renderer honours `prefers-reduced-motion` through the player, so
+        // reflect whatever it actually decided rather than assuming it is on.
+        document.getElementById("shake").checked = renderer.post.shake;
+
+        // The honest audio state, polled rather than assumed: the context only
+        // becomes "running" when a gesture has let it.
+        const soundEl = document.getElementById("sound");
+        const TEXT = {
+          stopped: "sound: no audio device",
+          starting: "sound: starting",
+          suspended: "sound: press a key",
+          running: "sound: on",
+        };
+        setInterval(() => {
+          const a = player.audio;
+          const state = a === null ? "stopped" : a.state;
+          const on = state === "running" && !player.muted;
+          soundEl.textContent = player.muted && state === "running" ? "sound: muted" : TEXT[state];
+          soundEl.dataset.on = on ? "1" : "0";
+        }, 250);
+
+        player.start();
+        // Handy from the devtools console: `prime.tick`, `prime.pause()`,
+        // `prime.machine.snapshot()`, `prime.audio.state`.
+        globalThis.prime = player;
+        globalThis.primeCart = cart;
+      } catch (e) {
+        fail.hidden = false;
+        const head = document.createElement("strong");
+        head.textContent = "The console did not start.";
+        const why = document.createElement("div");
+        why.textContent = e instanceof Error ? e.message : String(e);
+        const how = document.createElement("div");
+        how.append("Serve the repository root: ");
+        const cmd = document.createElement("code");
+        cmd.textContent = "npx vite";
+        how.append(cmd, " then open /examples/prime/index.html");
+        fail.append(head, why, how);
+      }
+    </script>
+  </body>
+</html>

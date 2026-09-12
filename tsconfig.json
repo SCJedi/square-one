@@ -6,6 +6,7 @@
     { "path": "./packages/runtime" },
     { "path": "./packages/player" },
     { "path": "./packages/stamper" },
+    { "path": "./packages/prime" },
     { "path": "./packages/cli" }
   ]
 }

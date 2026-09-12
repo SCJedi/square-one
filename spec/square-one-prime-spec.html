@@ -1,0 +1,594 @@
+<title>Square One Prime</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+<style>
+:root{
+  --bg:#f7f6fa;
+  --surface:#ffffff;
+  --surface-2:#efedf6;
+  --text:#1a1730;
+  --text-2:#4b4566;
+  --text-3:#6e678c;
+  --rule:#ded9ee;
+  --rule-strong:#b8b1d2;
+  --accent:#4a3bb5;
+  --accent-2:#8a2f5f;
+  --accent-soft:#e8e4f8;
+  --code-bg:#f1eff9;
+
+  --amend:#c0392f; --amend-soft:#fbeae8;
+  --gotcha:#b07d15; --gotcha-soft:#fbf3df;
+  --decide:#2f7a58; --decide-soft:#e4f2eb;
+
+  --tier-a:#c0392f; --tier-b:#c8761f; --tier-c:#b0901a; --tier-d:#3a83b8;
+  --tier-e:#2f7a58; --tier-f:#4a9d70; --tier-g:#7a7396;
+
+  --step-0:1.0625rem;
+  --measure:76ch;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0c0a16; --surface:#15122a; --surface-2:#1d1936;
+    --text:#eae7f6; --text-2:#b6b0cd; --text-3:#8b84a6;
+    --rule:#2a2546; --rule-strong:#423a67;
+    --accent:#9b8dfb; --accent-2:#e08bb0; --accent-soft:#1d1940;
+    --code-bg:#1a1633;
+    --amend:#f0776a; --amend-soft:#2c1618;
+    --gotcha:#e5b344; --gotcha-soft:#2b2312;
+    --decide:#6cc79a; --decide-soft:#13271d;
+    --tier-a:#f0776a; --tier-b:#eda45a; --tier-c:#dcc055; --tier-d:#6ab4e0;
+    --tier-e:#6cc79a; --tier-f:#8fd9b2; --tier-g:#9a93b6;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0c0a16; --surface:#15122a; --surface-2:#1d1936;
+  --text:#eae7f6; --text-2:#b6b0cd; --text-3:#8b84a6;
+  --rule:#2a2546; --rule-strong:#423a67;
+  --accent:#9b8dfb; --accent-2:#e08bb0; --accent-soft:#1d1940;
+  --code-bg:#1a1633;
+  --amend:#f0776a; --amend-soft:#2c1618;
+  --gotcha:#e5b344; --gotcha-soft:#2b2312;
+  --decide:#6cc79a; --decide-soft:#13271d;
+  --tier-a:#f0776a; --tier-b:#eda45a; --tier-c:#dcc055; --tier-d:#6ab4e0;
+  --tier-e:#6cc79a; --tier-f:#8fd9b2; --tier-g:#9a93b6;
+}
+
+*{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;}
+body{margin:0;background:var(--bg);color:var(--text);
+  font-family:"Source Serif 4","Iowan Old Style",Georgia,serif;
+  font-size:var(--step-0);line-height:1.66;font-optical-sizing:auto;}
+::selection{background:var(--accent-soft);}
+
+.wrap{max-width:1200px;margin:0 auto;padding:0 clamp(1rem,4vw,2.5rem);
+  display:grid;grid-template-columns:15rem minmax(0,1fr);
+  gap:clamp(1.5rem,4vw,3.5rem);align-items:start;}
+@media (max-width:960px){.wrap{grid-template-columns:minmax(0,1fr);}}
+
+.masthead{grid-column:1 / -1;border-bottom:2px solid var(--text);
+  padding:clamp(2.5rem,7vw,4.5rem) 0 1.5rem;margin-bottom:2.5rem;}
+.eyebrow{font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;font-size:.7rem;
+  font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:var(--text-3);
+  display:flex;flex-wrap:wrap;gap:.4rem 1.1rem;margin:0 0 1.1rem;}
+h1{font-family:Archivo,"Helvetica Neue",Arial,sans-serif;font-weight:700;
+  font-size:clamp(2.4rem,6.5vw,4rem);line-height:.98;letter-spacing:-.028em;
+  margin:0 0 .6rem;text-wrap:balance;}
+h1 .sub{display:block;font-size:clamp(1rem,2.4vw,1.4rem);font-weight:500;
+  letter-spacing:-.01em;color:var(--text-3);margin-top:.5rem;}
+.deck{font-size:1.15rem;color:var(--text-2);max-width:var(--measure);margin:1.2rem 0 0;}
+.status{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:1.5rem;}
+.chip{font-family:"IBM Plex Mono",monospace;font-size:.68rem;font-weight:500;
+  letter-spacing:.09em;text-transform:uppercase;padding:.3rem .6rem;
+  border:1px solid var(--rule-strong);border-radius:2px;color:var(--text-2);background:var(--surface);}
+.chip.draft{border-color:var(--gotcha);color:var(--gotcha);}
+
+.toc{position:sticky;top:1.5rem;font-family:Archivo,Arial,sans-serif;font-size:.84rem;
+  line-height:1.45;max-height:calc(100vh - 3rem);overflow-y:auto;}
+@media (max-width:960px){.toc{position:static;max-height:none;border:1px solid var(--rule);
+  background:var(--surface);padding:1.1rem 1.25rem;margin-bottom:2.5rem;}}
+.toc h2{font-size:.68rem;letter-spacing:.16em;text-transform:uppercase;color:var(--text-3);
+  font-weight:600;margin:0 0 .8rem;font-family:"IBM Plex Mono",monospace;}
+.toc ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.28rem;}
+.toc a{color:var(--text-2);text-decoration:none;display:grid;grid-template-columns:1.6rem 1fr;
+  gap:.4rem;padding:.15rem .3rem .15rem 0;border-radius:2px;}
+.toc a .n{font-family:"IBM Plex Mono",monospace;font-size:.72rem;color:var(--text-3);
+  font-variant-numeric:tabular-nums;}
+.toc a:hover,.toc a:hover .n{color:var(--accent);}
+
+main{min-width:0;}
+section{margin:0 0 3.25rem;scroll-margin-top:1.5rem;}
+p{margin:0 0 1.05rem;max-width:var(--measure);}
+main > section > h2{font-family:Archivo,Arial,sans-serif;font-size:clamp(1.5rem,3vw,2rem);
+  font-weight:700;letter-spacing:-.02em;line-height:1.12;margin:0 0 .35rem;text-wrap:balance;}
+h3{font-family:Archivo,Arial,sans-serif;font-size:1.03rem;font-weight:600;letter-spacing:-.005em;
+  margin:2.1rem 0 .5rem;display:flex;gap:.7rem;align-items:baseline;text-wrap:balance;}
+h3 .cn{font-family:"IBM Plex Mono",monospace;font-size:.78rem;font-weight:500;color:var(--accent);
+  font-variant-numeric:tabular-nums;flex:none;}
+h4{font-family:Archivo,Arial,sans-serif;font-size:.78rem;font-weight:600;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--text-3);margin:1.8rem 0 .6rem;}
+.lede{font-size:1.08rem;color:var(--text-2);max-width:var(--measure);}
+
+.tier{border-left:4px solid var(--tier-color,var(--rule-strong));padding-left:clamp(.9rem,2vw,1.4rem);}
+.tier-label{font-family:"IBM Plex Mono",monospace;font-size:.68rem;font-weight:600;
+  letter-spacing:.15em;text-transform:uppercase;color:var(--tier-color,var(--text-3));margin:0 0 .45rem;}
+.tier-radius{font-family:"IBM Plex Mono",monospace;font-size:.78rem;color:var(--text-3);
+  margin:0 0 1.4rem;max-width:var(--measure);}
+#tier-a{--tier-color:var(--tier-a);}
+#tier-b{--tier-color:var(--tier-b);}
+#tier-c{--tier-color:var(--tier-c);}
+#tier-d{--tier-color:var(--tier-d);}
+#tier-e{--tier-color:var(--tier-e);}
+#tier-g{--tier-color:var(--tier-g);}
+
+a{color:var(--accent);text-underline-offset:.16em;}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+
+code,kbd{font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:.855em;background:var(--code-bg);padding:.1em .34em;border-radius:2px;}
+pre{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.79rem;line-height:1.56;
+  background:var(--surface);border:1px solid var(--rule);padding:1.05rem 1.15rem;
+  overflow-x:auto;margin:1.1rem 0;color:var(--text-2);}
+pre code{background:none;padding:0;font-size:1em;}
+pre b{color:var(--text);font-weight:600;}
+pre i{color:var(--text-3);font-style:normal;}
+
+.kw{font-family:"IBM Plex Mono",monospace;font-size:.82em;font-weight:600;letter-spacing:.06em;
+  color:var(--accent-2);background:none;padding:0;}
+
+.note{border-left:3px solid var(--nc,var(--accent));background:var(--nb,var(--accent-soft));
+  padding:.85rem 1.1rem .9rem;margin:1rem 0 1.4rem;max-width:var(--measure);
+  font-size:.97rem;color:var(--text-2);}
+.note > .lbl{display:block;font-family:"IBM Plex Mono",monospace;font-size:.63rem;font-weight:600;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--nc,var(--accent));margin-bottom:.35rem;}
+.note p{margin:0 0 .6rem;}
+.note p:last-child{margin:0;}
+.note pre{margin:.7rem 0 .3rem;background:var(--bg);}
+.why{--nc:var(--accent);--nb:var(--accent-soft);}
+.amend{--nc:var(--amend);--nb:var(--amend-soft);}
+.gotcha{--nc:var(--gotcha);--nb:var(--gotcha-soft);}
+.decide{--nc:var(--decide);--nb:var(--decide-soft);}
+
+table{border-collapse:collapse;width:100%;font-size:.86rem;font-variant-numeric:tabular-nums;
+  margin:.4rem 0 1.4rem;}
+.scroll{overflow-x:auto;margin:1.2rem 0;border-bottom:1px solid var(--rule);}
+.scroll table{margin:0;min-width:34rem;}
+th,td{text-align:left;padding:.5rem .8rem .5rem 0;border-bottom:1px solid var(--rule);vertical-align:top;}
+th{font-family:Archivo,Arial,sans-serif;font-size:.67rem;font-weight:600;letter-spacing:.11em;
+  text-transform:uppercase;color:var(--text-3);border-bottom:1px solid var(--rule-strong);white-space:nowrap;}
+td code{font-size:.9em;}
+.mono td:first-child,.mono td:nth-child(2){font-family:"IBM Plex Mono",monospace;font-size:.9em;white-space:nowrap;}
+tbody tr:last-child td{border-bottom:none;}
+
+ul,ol.list{max-width:var(--measure);padding-left:1.15rem;margin:0 0 1.1rem;}
+li{margin-bottom:.4rem;}
+.swatch{display:inline-block;width:.6rem;height:.6rem;border-radius:1px;margin-right:.45rem;vertical-align:baseline;}
+
+footer{grid-column:1 / -1;border-top:2px solid var(--text);margin-top:2rem;padding:1.5rem 0 4rem;
+  font-family:"IBM Plex Mono",monospace;font-size:.72rem;color:var(--text-3);
+  display:flex;flex-wrap:wrap;gap:.5rem 1.5rem;justify-content:space-between;}
+@media (prefers-reduced-motion:reduce){*{animation:none !important;transition:none !important;}}
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow"><span>Console Specification</span><span>Prime</span><span>Draft 1</span><span>First-party platform</span></p>
+    <h1>Square One Prime<span class="sub">A deterministic modern console, and what it keeps from the small one</span></h1>
+    <p class="deck">The free console is 128 x 128 and fits on a four-dollar chip. This is the other one: full resolution, full colour, real audio, carts measured in gigabytes. It keeps every property that made the small machine worth building &mdash; replays as proof, content-addressed carts, reproducible builds, a sandbox a cart cannot argue with &mdash; by moving exactly one boundary.</p>
+    <div class="status">
+      <span class="chip draft">Status: draft</span>
+      <span class="chip">Prime 1.0.0-draft</span>
+      <span class="chip">Nothing implemented</span>
+      <span class="chip">Companion to the Square One spec</span>
+    </div>
+  </header>
+
+  <aside class="toc">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#boundary"><span class="n">0</span><span>The one decision</span></a></li>
+      <li><a href="#overview"><span class="n">1</span><span>Overview</span></a></li>
+      <li><a href="#tier-a"><span class="n">2</span><span>Frozen core</span></a></li>
+      <li><a href="#tier-b"><span class="n">3</span><span>The machine</span></a></li>
+      <li><a href="#tier-c"><span class="n">4</span><span>The ABI</span></a></li>
+      <li><a href="#tier-d"><span class="n">5</span><span>Carts at scale</span></a></li>
+      <li><a href="#tier-e"><span class="n">6</span><span>Engines and modules</span></a></li>
+      <li><a href="#stamper"><span class="n">7</span><span>The stamper</span></a></li>
+      <li><a href="#security"><span class="n">8</span><span>Security</span></a></li>
+      <li><a href="#conformance"><span class="n">9</span><span>Conformance</span></a></li>
+      <li><a href="#tiers"><span class="n">10</span><span>The two consoles</span></a></li>
+      <li><a href="#open"><span class="n">11</span><span>Open questions</span></a></li>
+      <li><a href="#order"><span class="n">12</span><span>Build order</span></a></li>
+    </ol>
+  </aside>
+
+  <main>
+
+    <!-- ============ 0 ============ -->
+    <section id="boundary">
+      <h2>0. The one decision this document turns on</h2>
+      <p class="lede">Everything else follows from a single line, so it goes first.</p>
+
+      <div class="note decide">
+        <span class="lbl">The normative boundary is the simulation, not the picture</span>
+        <p><strong>The simulation is bit-exact and normative. Presentation is neither.</strong> Two conformant Prime machines given the same cart, the same seed and the same inputs <span class="kw">MUST</span> reach identical simulation state on every tick. They are under no obligation to produce identical pixels, and on real hardware they will not.</p>
+      </div>
+
+      <p>On the small console the conformance chain hashes the framebuffer, which works because a 128 x 128 software rasterizer is deterministic by construction. Put a GPU under it and that collapses immediately: drivers differ, vendors differ, the same driver differs across a version bump. A specification that demanded identical pixels from a modern renderer would be a specification nobody could implement twice.</p>
+
+      <p>So the line moves. And it moves to somewhere the small console already put one: <strong>audio has always been non-normative</strong> &mdash; the simulation emits commands, the mixer consumes them, nothing flows back, and mixing quality may differ between a phone and a desktop without any replay diverging. Prime applies that same rule to rendering, which is the generalisation it was always waiting for.</p>
+
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Normative &mdash; bit-exact, forever</th><th>Non-normative</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>Simulation state at the end of every tick; the PRNG sequence; all arithmetic performed by the simulation; input sampling and quantization; the order of every iteration the simulation performs; cart identity</td>
+              <td>Rendering, at any fidelity; shaders; resolution and colour depth; frame interpolation; audio mixing; texture filtering; asset streaming order; anything running on a thread other than the simulation's</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note why">
+        <span class="lbl">What this buys, and why it is worth the whole document</span>
+        <p>Replays, rollback netplay, save states, verifiable scores and time-travel debugging are all the same mechanism, and that mechanism survives intact from a four-dollar microcontroller to a machine with a discrete GPU. <strong>A replay recorded on one runs on the other.</strong> A speedrun set on Prime verifies on the free console and the reverse, because they agree about the only thing that has to be agreed about.</p>
+        <p>It also means a Prime runtime may be rewritten &mdash; new renderer, new backend, a port to hardware that did not exist when the cart shipped &mdash; without invalidating a single recorded run. The picture is an implementation detail. The simulation is the contract.</p>
+      </div>
+    </section>
+
+    <!-- ============ 1 ============ -->
+    <section id="overview">
+      <h2>1. Overview</h2>
+      <p>Prime is a first-party console: a machine we build to ship our own games on, with a cart format, a runtime contract, and a determinism guarantee. It is not a stretched version of the 128 x 128 machine and carries no obligation to run its carts.</p>
+
+      <p>What it inherits is the architecture rather than the aesthetic:</p>
+      <ul>
+        <li><strong>A cart is a pure function of seed and inputs.</strong> No wall clock, no ambient entropy, no network, no host storage outside its own save region.</li>
+        <li><strong>A cart's identity is its content hash</strong>, and a recipe rebuilds it byte-identically.</li>
+        <li><strong>A cart runs sandboxed</strong> and cannot reach the network by construction rather than by policy.</li>
+        <li><strong>Modules and recipes</strong> &mdash; engines, art, audio and tuning as versioned, content-addressed layers that a stamper resolves, type-checks and proves.</li>
+      </ul>
+
+      <p>What changes is scale, and one boundary.</p>
+
+      <div class="scroll">
+        <table>
+          <thead><tr><th></th><th>Square One</th><th>Prime</th></tr></thead>
+          <tbody>
+            <tr><td>Resolution</td><td>128 x 128 fixed</td><td>1920 x 1080 logical, presented at any display resolution</td></tr>
+            <tr><td>Colour</td><td>16 of 64, 4 bpp</td><td>full 8-bit sRGB; HDR optional</td></tr>
+            <tr><td>Simulation state</td><td>64 KB, the whole machine</td><td>64 MB cap, separate from assets</td></tr>
+            <tr><td>Cart</td><td>64 KB</td><td>16 GB, streamed, Merkle-verified</td></tr>
+            <tr><td>Payload</td><td><code>script/js1</code></td><td><code>wasm/1</code></td></tr>
+            <tr><td>Audio</td><td>4 chip channels</td><td>real mixing, streamed sources</td></tr>
+            <tr><td>Input</td><td>8 buttons, 2 players</td><td>16 buttons + 4 axes + 2 triggers, 8 players</td></tr>
+            <tr><td>Conformance hashes</td><td>the framebuffer</td><td><strong>the simulation state</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ 2 ============ -->
+    <section id="tier-a" class="tier">
+      <p class="tier-label">Tier A</p>
+      <h2>2. The frozen core</h2>
+      <p class="tier-radius">Blast radius: every cart ever made and every replay in the archive. Nothing here may change after Prime 1 ships.</p>
+
+      <h3><span class="cn">2.1</span> The cart contract</h3>
+      <p>A cart <span class="kw">MUST</span> expose:</p>
+<pre><code>boot(seed: u64)          once, after the cart's initial state is installed
+tick(input: InputFrame)  exactly once per simulated frame
+render(alpha: f64)       zero or more times per tick, on the presentation clock</code></pre>
+      <p><code>render</code> is where the split lives. It <span class="kw">MUST NOT</span> write to simulation state, and a conformant runtime <span class="kw">MUST</span> enforce that: it is called with the simulation arena mapped read-only. <code>alpha</code> is the interpolation fraction between the last two ticks, and it exists so a 144 Hz display looks smooth without the simulation ever running at 144 Hz.</p>
+
+      <div class="note gotcha">
+        <span class="lbl">Gotcha &mdash; interpolation must not feed back</span>
+        <p>The single most common way a deterministic engine stops being deterministic is a value computed for smoothing that finds its way into the next tick. Read-only enforcement is not a nicety here; it is the wall that keeps <code>render</code> from quietly becoming part of the simulation. Where the hardware cannot map it read-only, the runtime <span class="kw">MUST</span> hash the arena before and after <code>render</code> in development builds and fault on a change.</p>
+      </div>
+
+      <h3><span class="cn">2.2</span> Time</h3>
+      <p>The simulation runs at a fixed <strong>60 Hz</strong>. The only clock a cart can see is a <strong>u64 tick counter</strong>. Presentation is decoupled and may run at any rate; the runtime <span class="kw">MUST</span> clamp catch-up to at most <strong>5 ticks</strong> per presented frame.</p>
+      <p>No wall clock, no frame duration, no real elapsed time is reachable from a cart. As on the small console, this is what makes a cart archival: it behaves identically in 2026 and in 2050, and it cannot break on a leap day.</p>
+
+      <h3><span class="cn">2.3</span> Numbers &mdash; and the rules that make floats safe</h3>
+      <p>Prime simulates in <strong>IEEE 754 binary32 and binary64</strong>. That is safe, and it is safe for a reason worth stating precisely rather than trusting: <code>+</code>, <code>-</code>, <code>*</code>, <code>/</code> and <code>sqrt</code> are <em>exactly specified</em> by IEEE 754 and produce identical results on every conformant platform. Everything else is where determinism dies.</p>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Rule</th><th>Why</th></tr></thead>
+          <tbody>
+            <tr><td>Only <code>+ - * /</code> and <code>sqrt</code> come from the platform</td><td>Exactly specified. Nothing else is.</td></tr>
+            <tr><td>Every transcendental comes from the console's own library</td><td><code>sin</code>, <code>cos</code>, <code>exp</code>, <code>pow</code>, <code>atan2</code> are <strong>not</strong> specified to the last bit and differ between libms and between CPU vendors. Prime ships its own, as normative code, exactly as the small console ships a committed sine table.</td></tr>
+            <tr><td>Fused multiply-add is <span class="kw">MUST NOT</span> unless explicit</td><td>A compiler contracting <code>a*b+c</code> into an FMA changes the result. It must be an opcode the cart asked for, never an optimisation.</td></tr>
+            <tr><td>No fast-math, no reassociation, no flush-to-zero</td><td>All three trade exactness for speed, which is the wrong trade in the one place it cannot be made.</td></tr>
+            <tr><td>NaN payloads are canonicalized at every ABI boundary</td><td>The one place WebAssembly is deliberately non-deterministic.</td></tr>
+            <tr><td>Iteration order is specified everywhere</td><td>Hash-map order is the classic silent desync. Sort before you iterate, or use an ordered container.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note decide">
+        <span class="lbl">Decision &mdash; floats, not fixed point</span>
+        <p>The small console uses 16.16 fixed point because a script interpreter was a valid runtime path and "mostly deterministic" is worthless when it is. Prime's payload is WebAssembly, whose float semantics are specified, so the fixed-point tax buys nothing and costs a great deal at physics scale. The rules above are what make that safe, and they are enforceable: a conformance runner can diff two implementations over a long replay and find any violation.</p>
+      </div>
+
+      <h3><span class="cn">2.4</span> Randomness</h3>
+      <p>One console-owned PRNG, named and specified bit-for-bit: <strong>PCG64-DXSM</strong>, 128-bit state, seeded by the console, its state living inside the simulation arena and therefore inside every snapshot. There is no other entropy source in the machine.</p>
+
+      <div class="note why">
+        <span class="lbl">Why a different generator from the small console</span>
+        <p>The small console uses xoshiro128** because JavaScript has no 64-bit integers and a 64-bit multiply there is a correctness hazard in the most determinism-critical function in the machine. WebAssembly has <code>i64</code> natively, so that constraint is gone and the better generator is simply available. The lesson that generalises is the one that produced the change: <strong>pick the generator the runtime can express exactly</strong>, and write the choice down to the last constant.</p>
+      </div>
+
+      <h3><span class="cn">2.5</span> Input</h3>
+<pre><code>per player, per tick:
+  buttons   u16      16 digital, one bit each
+  axes      i16 x 4  two sticks, full range, ALREADY QUANTIZED
+  triggers  u8  x 2
+                     = 12 bytes per player
+
+8 player slots        = 96 bytes per tick
+                      = 5.6 KB/s, and a ten-minute replay compresses to a few hundred KB</code></pre>
+      <p>Analog input <span class="kw">MUST</span> be quantized by the runtime <strong>before</strong> the simulation sees it, at the resolution above. A stick's true position is an analog signal that differs between controllers, driver stacks and polling rates; what reaches the cart is an integer, and integers replay.</p>
+      <p>Pointer and motion input are <strong>extensions</strong> (section 4.4), not core, because they cannot be quantized into a fixed-size frame without deciding a resolution, and that decision belongs to a game rather than to the machine.</p>
+      <p>System buttons &mdash; pause, menu, screenshot, record &mdash; belong to the console. A cart <span class="kw">MUST NOT</span> be able to observe or suppress them.</p>
+
+      <h3><span class="cn">2.6</span> Simulation state</h3>
+      <p>The complete state of a running simulation is <strong>one contiguous arena</strong>, at most <strong>64 MB</strong>, plus nothing. No state in host objects, no state in the renderer, no state on the audio thread, no state in a closure that outlives a snapshot.</p>
+
+      <div class="note decide">
+        <span class="lbl">Decision &mdash; mutable state and assets are different memory</span>
+        <p>This is the change that lets rollback scale. The small console's rule is "the whole machine is one buffer", and at 64 KB that is free. At Prime scale a game may hold gigabytes of textures, meshes and audio, and none of it is <em>mutable</em>: assets are loaded, never written, and identical on every machine running the same cart.</p>
+        <p>So they are not in the arena. <strong>A snapshot copies the arena and nothing else</strong>, because immutable data does not need saving &mdash; it needs only to be the same, which the cart hash already guarantees. 64 MB at 60 Hz is 3.8 GB/s naive and a small fraction of that with XOR-delta, which is what makes eight frames of rollback affordable on a machine holding twelve gigabytes of assets.</p>
+      </div>
+
+      <h3><span class="cn">2.7</span> The simulation runs on one thread</h3>
+      <p>Rendering, audio, asset streaming, decompression and I/O are parallel and non-normative. <strong>The simulation is single-threaded</strong>, because deterministic multithreading is a research problem wearing an engineering costume, and a specification that pretended otherwise would be a specification with an untestable clause in it.</p>
+      <p>A deterministic job graph &mdash; a fixed schedule the runtime executes identically on every machine &mdash; is <strong>reserved</strong>, defined here and implemented later or never. Reserving it costs a paragraph; adding it after carts exist is a Tier A break.</p>
+    </section>
+
+    <!-- ============ 3 ============ -->
+    <section id="tier-b" class="tier">
+      <p class="tier-label">Tier B</p>
+      <h2>3. The machine</h2>
+      <p class="tier-radius">Blast radius: every cart. A change here is a new Prime major, with the old runtime kept alive for the carts that shipped against it.</p>
+
+      <h3><span class="cn">3.1</span> The render target</h3>
+      <p>A cart draws in a <strong>1920 x 1080 logical coordinate space</strong> using floating-point coordinates. The runtime presents at whatever the display is: 1080p one-to-one, 4K supersampled or integer-scaled, ultrawide with the cart's declared letterbox policy, a handheld at 720p.</p>
+
+      <div class="note why">
+        <span class="lbl">Why a logical space rather than a resolution</span>
+        <p>Pinning a resolution ties every cart to the display generation it shipped in. A logical space means a cart written today renders natively on hardware that does not exist yet, and it makes the resolution question &mdash; which is where "modern console" arguments usually start &mdash; a property of the runtime rather than of the format.</p>
+        <p>The number is 1920 x 1080 rather than something smaller because it is the resolution people author art against, and 16:9 because a letterbox is a decision a game should make rather than inherit.</p>
+      </div>
+
+      <h3><span class="cn">3.2</span> Colour</h3>
+      <p>8-bit sRGB output, compositing in linear space. HDR10 and Rec. 2020 are declared extensions. There is no palette, no colour count, and no fixed number of anything on screen.</p>
+
+      <h3><span class="cn">3.3</span> Memory</h3>
+      <div class="scroll">
+        <table class="mono">
+          <thead><tr><th>Region</th><th>Cap</th><th>Mutable</th><th>In a snapshot</th></tr></thead>
+          <tbody>
+            <tr><td>Simulation arena</td><td>64 MB</td><td>yes</td><td><strong>yes &mdash; all of it</strong></td></tr>
+            <tr><td>Asset memory</td><td>12 GB</td><td>no</td><td>no</td></tr>
+            <tr><td>Render scratch</td><td>runtime's own</td><td>yes</td><td>no &mdash; not cart-visible</td></tr>
+            <tr><td>Save region</td><td>16 MB per cart id</td><td>yes</td><td>via the host, not the arena</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3><span class="cn">3.4</span> Audio</h3>
+      <p>Real audio: streamed and static sources, a mixer graph, sample-accurate scheduling, and effects. All of it non-normative, as on the small console and for the same reason &mdash; an audio device runs on its own clock, which drifts against the presentation clock and differs per device.</p>
+      <p><strong>The simulation emits audio commands; the mixer consumes them; nothing flows back.</strong> A cart <span class="kw">MUST NOT</span> be able to read the audio clock, a playback position, or an analysis of its own output into simulation state.</p>
+
+      <h3><span class="cn">3.5</span> Budgets</h3>
+      <div class="scroll">
+        <table>
+          <tbody>
+            <tr><td>Cart file</td><td>16 GB</td></tr>
+            <tr><td>Simulation arena</td><td>64 MB</td></tr>
+            <tr><td>Asset memory resident</td><td>12 GB</td></tr>
+            <tr><td>Code</td><td>64 MB of WebAssembly</td></tr>
+            <tr><td>Simulation tick budget</td><td>8 ms; the watchdog fires at 12</td></tr>
+            <tr><td>Save</td><td>16 MB per cart id</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note gotcha">
+        <span class="lbl">Gotcha &mdash; the tick budget is the one that bites</span>
+        <p>At 60 Hz a tick has 16.7 ms, and a naive reading says the simulation may use most of it. It may not: presentation, audio and streaming share the frame, and <strong>rollback netplay re-simulates up to eight ticks inside one frame.</strong> A simulation that uses 8 ms is a game that cannot roll back. Budget accordingly, and measure the re-simulation cost rather than the single-tick cost.</p>
+      </div>
+    </section>
+
+    <!-- ============ 4 ============ -->
+    <section id="tier-c" class="tier">
+      <p class="tier-label">Tier C</p>
+      <h2>4. The ABI</h2>
+      <p class="tier-radius">Blast radius: carts using a new call. Additive only within a major.</p>
+
+      <h3><span class="cn">4.1</span> A cart submits a scene; it does not touch the GPU</h3>
+      <p>Drawing is a <strong>display list</strong> built during <code>render</code> and handed to the runtime: transforms, sprites, meshes, text, materials, lights, post-process stages. The runtime decides how to draw it &mdash; GPU on a desktop, a software rasterizer on a reference implementation, something else on hardware nobody has built yet.</p>
+
+      <div class="note decide">
+        <span class="lbl">Decision &mdash; this is what makes the sandbox survivable</span>
+        <p>A cart that could issue raw GPU commands would need a driver, and a driver is an enormous attack surface reachable by a stranger's code. A cart that submits a scene needs nothing but memory. The same choice is what lets a headless conformance runner exist at all: it executes the simulation and simply never rasterizes, which is the only way to verify a million ticks in a CI job.</p>
+      </div>
+
+      <h3><span class="cn">4.2</span> Shaders</h3>
+      <p>Carts <span class="kw">MAY</span> ship shaders, compiled from a portable IR at stamp time and validated by the runtime. They are <strong>presentation only</strong>: a shader cannot write to the simulation arena, cannot be read back by the simulation, and a cart <span class="kw">MUST NOT</span> be able to branch on whether one compiled.</p>
+
+      <h3><span class="cn">4.3</span> The surface</h3>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Namespace</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>sim</code></td><td>tick counter, PRNG, the normative math library, arena allocation</td></tr>
+            <tr><td><code>draw</code></td><td>display-list construction: transforms, sprites, meshes, text, materials, post stages</td></tr>
+            <tr><td><code>snd</code></td><td>source playback, mixer graph, parameter automation</td></tr>
+            <tr><td><code>inp</code></td><td>the quantized input frame, and which slots are populated</td></tr>
+            <tr><td><code>res</code></td><td>asset handles, residency requests, streaming state</td></tr>
+            <tr><td><code>save</code></td><td>the 16 MB region, through host hooks the cart cannot see</td></tr>
+            <tr><td><code>dbg</code></td><td>trace and counters; a no-op in a release runtime, and not observable by the cart</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note gotcha">
+        <span class="lbl">Gotcha &mdash; asset residency is a determinism trap</span>
+        <p>Streaming is non-normative, so a cart <span class="kw">MUST NOT</span> branch on whether an asset has finished loading. That is exactly the tempting thing to do, and it makes the simulation a function of disk speed. <code>res</code> reports residency to <code>render</code> only; the simulation is told that an asset exists and nothing about where it is.</p>
+      </div>
+
+      <h3><span class="cn">4.4</span> Extensions</h3>
+      <p>Pointer, motion, haptics, HDR, ultrawide, more than 8 players. Declared in <code>META</code> as <code>uses</code> (soft, enhance if present) or <code>requires</code> (hard, refuse to run without), the same split glTF uses.</p>
+      <p>Anything that reaches the simulation &mdash; pointer and motion do &mdash; <span class="kw">MUST</span> define its quantization in the extension, or a replay is not portable between two machines that both claim to support it.</p>
+    </section>
+
+    <!-- ============ 5 ============ -->
+    <section id="tier-d" class="tier">
+      <p class="tier-label">Tier D</p>
+      <h2>5. Carts at scale</h2>
+      <p class="tier-radius">Blast radius: tooling and distribution. Forward-compatible by design.</p>
+
+      <h3><span class="cn">5.1</span> The container</h3>
+      <p>The same shape as the small console's: magic, version, a chunk directory, typed chunks, uppercase critical and lowercase ancillary so an old runtime refuses exactly the carts it genuinely cannot run and skips the rest. Sizes are 64-bit and the directory is at the head so a chunk can be range-requested without the file.</p>
+
+      <h3><span class="cn">5.2</span> Identity is a Merkle root</h3>
+<pre><code>leaves      1 MiB of canonical cart bytes each
+node        BLAKE3 of its children
+cart_id     the root, 256 bits, Crockford base32</code></pre>
+
+      <div class="note decide">
+        <span class="lbl">Decision &mdash; BLAKE3 here, and SHA-256 on the small console</span>
+        <p>The small console specified BLAKE3 and the implementation changed it to SHA-256, because a second hash function is a second thing that can disagree between implementations and a 64 KB cart hashes in about a millisecond either way.</p>
+        <p>At 16 GB the argument reverses, and not because of speed. A <strong>tree</strong> hash lets a player verify a one-megabyte leaf the moment it arrives instead of after the whole download, which is what makes streaming a cart safe rather than hopeful: a corrupted or substituted block is caught at the block, by the machine, before anything executes it. BLAKE3 is a tree hash natively. That is a property SHA-256 does not have, and it is the reason &mdash; speed is a rounding error next to it.</p>
+      </div>
+
+      <h3><span class="cn">5.3</span> Streaming, signing, and what identity covers</h3>
+      <p>A cart <span class="kw">MAY</span> be played before it has fully arrived: the runtime verifies each leaf against the Merkle path as it lands. An <code>ed25519</code> signature over the root establishes the author. The root covers every byte except the signature itself, label art and recipe included &mdash; swapping a screenshot on a known cart <span class="kw">MUST</span> produce a different id.</p>
+
+      <h3><span class="cn">5.4</span> What a cart may not contain</h3>
+      <p>No executable outside the declared WebAssembly. No native code, no dynamic library, no interpreter for a second language shipped as data and fed with cart-authored source. The payload is the payload, and it is the thing that was validated at stamp time.</p>
+    </section>
+
+    <!-- ============ 6 ============ -->
+    <section id="tier-e" class="tier">
+      <p class="tier-label">Tiers E and F</p>
+      <h2>6. Engines and modules</h2>
+      <p class="tier-radius">Blast radius: carts that opt in. Free to evolve, because a cart pins a version and the engine is payload inside it.</p>
+      <p>Inherited unchanged from the small console, because the design never depended on the machine being small. Modules are content-addressed, versioned, and declare what they <strong>provide</strong> and what they <strong>require</strong>, so a recipe can be type-checked before anything is built.</p>
+      <p>One rule earned the hard way and worth carrying across: <strong>a manifest is a claim, and the stamper's job is to verify claims against bytes.</strong> A pack that declares a capability must be checked for it, not believed.</p>
+      <p>What Prime adds is scale: modules may carry gigabytes, so a module's identity is a Merkle root and a recipe pins roots rather than paths.</p>
+    </section>
+
+    <!-- ============ 7 ============ -->
+    <section id="stamper">
+      <h2>7. The stamper</h2>
+      <p>Unchanged in shape: <strong>resolve, merge, bind, validate, compile, pack, prove</strong>, seven pure functions, no shared mutable state. The recipe is the source; the cart is a build artifact; the same recipe and the same module roots produce a byte-identical cart on any machine.</p>
+
+      <h3><span class="cn">7.1</span> What <code>prove</code> means now</h3>
+      <p>The prover runs the cart headless &mdash; simulation only, never rasterizing &mdash; for a declared number of ticks against a replay, and records the chain of <strong>simulation-state hashes</strong>. That chain is the conformance artifact, and it is what a second implementation must reproduce.</p>
+
+      <div class="note why">
+        <span class="lbl">Why the prover never draws</span>
+        <p>It could not usefully: pixels are non-normative, so a rendered frame proves nothing about conformance. It also means proving is cheap &mdash; a million ticks in a CI job with no GPU, no display and no driver &mdash; which is the difference between a conformance suite that runs on every commit and one that runs when somebody remembers.</p>
+      </div>
+    </section>
+
+    <!-- ============ 8 ============ -->
+    <section id="security">
+      <h2>8. Security</h2>
+      <p class="lede">A first-party console still runs code from a stranger the moment it runs code from a contractor, a middleware vendor, or its own team eighteen months from now. The threat model does not require an open store to be worth having.</p>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Threat</th><th>What stops it</th></tr></thead>
+          <tbody>
+            <tr><td>Tampered or substituted cart</td><td>Merkle root is identity, verified per leaf during streaming</td></tr>
+            <tr><td>Impersonated author</td><td><code>ed25519</code> over the root</td></tr>
+            <tr><td>Cart exfiltrates or phones home</td><td>No network exists in the sandbox. Absent, not policed.</td></tr>
+            <tr><td>Cart escapes into the host</td><td>WebAssembly memory isolation, no native code, a scene submission rather than a driver</td></tr>
+            <tr><td>Cart hangs the machine</td><td>Fuel metering &mdash; wasm can be instrumented per basic block, which the small console's Worker could never do &mdash; plus a watchdog and a terminable process</td></tr>
+            <tr><td>Poisoned module in a build</td><td>Root-pinned recipes and reproducible builds: anyone can rebuild and compare</td></tr>
+            <tr><td>Faked scores or ghosts</td><td>Replays are proofs. Re-simulate the input log; the simulation is normative</td></tr>
+            <tr><td>A diagnostic used as an injection vector</td><td>An error message quotes cart-authored text, so it is untrusted output. Never rendered as markup.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Cart code runs in its own process with no filesystem, no network and no device access, communicating with the runtime over a typed channel. The save region is reached through host hooks the cart cannot enumerate.</p>
+    </section>
+
+    <!-- ============ 9 ============ -->
+    <section id="conformance">
+      <h2>9. Conformance</h2>
+      <p>An implementation is Prime 1 conformant if and only if:</p>
+      <ol class="list">
+        <li>For every published conformance case, the chain of per-tick <strong>simulation-state hashes</strong> matches the published chain <strong>exactly</strong>.</li>
+        <li>It implements the full Tier C ABI at the minor it declares, and refuses a cart requiring a minor it does not.</li>
+        <li>It enforces the arithmetic rules of 2.3 &mdash; verifiable by running the published float-conformance cart, which exercises every edge the rules exist to protect.</li>
+        <li>It quantizes input before the simulation sees it, at the resolution in 2.5.</li>
+        <li>It never exposes wall-clock time, network, host storage or asset residency to the simulation.</li>
+        <li>It maps the simulation arena read-only during <code>render</code>, or detects a write in development builds.</li>
+        <li>It refuses carts with unknown critical chunks and accepts carts with unknown ancillary ones.</li>
+      </ol>
+      <p>Nothing about the picture appears in that list, and that is the point.</p>
+    </section>
+
+    <!-- ============ 10 ============ -->
+    <section id="tiers">
+      <h2>10. The two consoles</h2>
+      <p class="lede">Context rather than requirement: Prime carries no obligation to run a Square One cart, and no cart is required to exist in both places. Porting is a decision made per game, in-house.</p>
+      <p>What is worth knowing is what the shared architecture gives away for free when a game does exist in both.</p>
+      <div class="note decide">
+        <span class="lbl">A replay crosses the tiers</span>
+        <p>Because the simulation is the normative boundary on both machines, a cart whose mechanics are the same in both places has the same simulation in both places &mdash; and therefore the same replay format, the same scores, the same ghosts and the same netplay. The free console and Prime are then <strong>one game at two fidelities</strong> rather than two games, and a player's progress and records travel with them.</p>
+        <p>That is a property of the architecture, not a feature anyone has to build. It only holds where the mechanics genuinely match, which is a design decision per game &mdash; but where it holds, it holds completely.</p>
+      </div>
+      <p>The constraint that decides whether it holds is worth stating once: <strong>downlevelling works on assets and never on mechanics.</strong> A palette quantizes and a texture downscales; nothing mechanically turns a game built around eight analog axes and two hundred entities into one with eight buttons. A game that is meant to exist on both is designed core-loop-first for the small machine and given fidelity on Prime. A game that is not simply is not.</p>
+    </section>
+
+    <!-- ============ 11 ============ -->
+    <section id="open">
+      <h2>11. Open questions</h2>
+      <ul>
+        <li><strong>The normative math library is the critical path.</strong> Every transcendental the simulation may use, specified to the bit, with a reference implementation and conformance vectors. Nothing else in Tier A is as much work or as unforgiving, and no cart can ship before it exists.</li>
+        <li><strong>Wasm SIMD.</strong> Deterministic in principle; the question is whether every backend agrees today. Until that is measured, SIMD in the simulation is an open risk rather than a decision.</li>
+        <li><strong>The 64 MB arena cap is a guess.</strong> It is chosen to keep eight frames of rollback affordable. Whether a real game fits is an empirical question and the answer changes the number.</li>
+        <li><strong>Save migration.</strong> A 16 MB save written by version 1 of a cart, read by version 4. The small console never had to answer this; Prime does.</li>
+        <li><strong>Whether the deterministic job graph is ever built</strong>, and what it costs to leave the door open.</li>
+        <li><strong>The name.</strong> Prime is a working title.</li>
+      </ul>
+    </section>
+
+    <!-- ============ 12 ============ -->
+    <section id="order">
+      <h2>12. Build order</h2>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Phase</th><th>Deliverable</th><th>Why here</th></tr></thead>
+          <tbody>
+            <tr><td>0</td><td>Tier A frozen on paper. The normative math library, with conformance vectors.</td><td>The only irreversible work, and the library gates everything</td></tr>
+            <tr><td>1</td><td>Simulation core: arena, PRNG, tick loop, wasm host &mdash; <strong>and the state-hash chain harness</strong></td><td>Retrofitting determinism tests after drift has entered is misery. It was true at 64 KB and it is worse at 64 MB.</td></tr>
+            <tr><td>2</td><td>Container, Merkle identity, streaming verification, CLI</td><td>Everything downstream needs a cart to exist</td></tr>
+            <tr><td>3</td><td>Display list and a <strong>software reference renderer</strong></td><td>Reference first: it is the thing a GPU backend is later checked against for scene correctness, and it makes the whole system testable headlessly</td></tr>
+            <tr><td>4</td><td>GPU backend, audio graph, the player shell</td><td>Now it is a console</td></tr>
+            <tr><td>5</td><td>Stamper, modules, the first engine</td><td>Recipe in, proved cart out</td></tr>
+            <tr><td>6</td><td>Rollback netplay</td><td><strong>The real test of Tier A.</strong> Nothing exposes a determinism hole like re-simulating eight ticks a frame against another machine.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note why">
+        <span class="lbl">Why netplay is last and why it is the acceptance test</span>
+        <p>Rollback is the most demanding consumer of determinism there is: it re-runs the recent past dozens of times a second and compares against a machine it does not control. A hole that a replay would surface after ten minutes, rollback surfaces in a second, loudly, in front of two players. Building it last and treating it as the measurement &mdash; rather than as a feature &mdash; is what tells you whether Tier A was actually right.</p>
+      </div>
+    </section>
+
+  </main>
+
+  <footer>
+    <span>Square One Prime &mdash; Draft 1</span>
+    <span>The simulation is the contract</span>
+    <span>The picture is an implementation detail</span>
+  </footer>
+
+</div>
