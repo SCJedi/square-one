@@ -1,5 +1,7 @@
 /**
- * The sound of Red Breaker on Prime: seventeen effects, synthesised.
+ * The sound of Red Breaker on Prime: seventeen effects and three bands,
+ * synthesised. The effects and the mixer are here; the score and its scheduler
+ * are in `music.ts`, which this file drives.
  *
  * =========================================================================
  * REPRODUCE THE CHARACTER, NOT THE CHIP
@@ -72,18 +74,50 @@
  * cutting it, because an oscillator stopped mid-cycle is a click and a click is
  * the one sound in here nobody designed.
  *
+ * AND THE SONG OBEYS THE SAME RULE. `music.ts` writes its lead on channel 2 and
+ * its bass on channel 3, exactly as the chip's patterns do, and an effect that
+ * claims one of those takes that voice for as long as it sounds -- so the alarm,
+ * on channel 3, drops the floor out from under itself for its whole 900 ms over
+ * a melody that never stops. Channels 0 and 1 are left to the block, paddle and
+ * wall hits, which fire many times a second and would shred a bed. On the chip
+ * that was a voice budget doing a mixing job for free; here there is no budget,
+ * so {@link MusicScheduler.duck} does it on purpose. Same rule, same wiring,
+ * same sound.
+ *
  * =========================================================================
- * AUTOPLAY, HONESTLY
+ * AUTOPLAY, HONESTLY -- AND `resume()` DOES NOT SETTLE
  * =========================================================================
  * A browser will not start an `AudioContext` outside a user gesture, and the
- * refusal is quiet: `resume()` resolves, `state` stays "suspended", and the page
- * plays nothing while looking fine. So, exactly as
- * `packages/player/src/audio-graph.ts` does it, `start()` RESOLVES ONLY WHEN THE
- * CONTEXT IS ACTUALLY RUNNING and rejects otherwise, `state` reports
- * "suspended" rather than "running" so a shell can say so on screen, and the
- * context and its graph are kept so a later gesture is one `resume()` away. A
- * mixer that claims to be playing while it is not is worse than one that admits
- * it.
+ * refusal is quiet. So `start()` RESOLVES ONLY WHEN THE CONTEXT IS ACTUALLY
+ * RUNNING and rejects otherwise, `state` reports "suspended" rather than
+ * "running" so a shell can say so on screen, and the context and its graph are
+ * kept so a later gesture is one `resume()` away. A mixer that claims to be
+ * playing while it is not is worse than one that admits it.
+ *
+ * THE PART THAT IS NOT IN THE DOCUMENTATION, and that cost this console its
+ * sound: **Chrome does not reject a `resume()` made outside a gesture. It leaves
+ * the promise PENDING, forever.** It does not resolve, it does not reject, and
+ * `state` stays "suspended" the whole time. So a `start()` that merely awaits
+ * `resume()` never returns, and an in-flight guard built on that promise --
+ * `if (starting !== null) return starting` -- hands every later call the same
+ * dead promise and never asks the browser again. The gesture the player gives is
+ * then answered by a promise created BEFORE the gesture, `resume()` is never
+ * called a second time, and the console plays nothing while reporting "starting"
+ * for the rest of the session. That was the bug, and it is why two rules hold
+ * here now:
+ *
+ *   1. **NEVER AWAIT `resume()` AS THOUGH IT WILL SETTLE.** It is kicked, and
+ *      what is awaited is the CONTEXT'S OWN STATE -- a `statechange` to
+ *      "running", or a short deadline after which the honest answer is
+ *      "suspended". Every attempt therefore finishes.
+ *   2. **EVERY `start()` ASKS THE BROWSER AGAIN, from its own task.** A browser
+ *      decides whether a resume is allowed by looking at the task the call was
+ *      made in, so a call that shares an earlier attempt's promise instead of
+ *      making its own `resume()` throws the gesture away. Sharing the WAIT is
+ *      fine; sharing the ASK is the defect.
+ *
+ * And because a player cannot read a promise, {@link PrimeAudio.reason} carries
+ * the one-sentence reason there is no sound, for a shell to put on the glass.
  *
  * =========================================================================
  * AND IT MUST BE SAFE TO CALL FROM A HEADLESS TEST
@@ -95,6 +129,13 @@
  * is byte-identical whichever backend is installed. Audio is not simulation.
  */
 
+import {
+  MUSIC_FADE_FRAMES,
+  MUSIC_LOOKAHEAD_S,
+  MUSIC_PUMP_MS,
+  createMusicScheduler,
+} from "./music";
+import type { MusicScheduler, MusicVoice } from "./music";
 import type { Snd, SndOpts } from "./sim";
 
 // ===========================================================================
@@ -797,12 +838,23 @@ export interface PrimeAudio extends Snd {
    * Bring the mixer up. MUST be called from a user gesture: it resolves only
    * when the context is genuinely running, and rejects -- leaving `state` at
    * "suspended" -- when the browser is holding it back.
+   *
+   * IT ALWAYS SETTLES, within {@link RESUME_DEADLINE_MS}. Call it again from the
+   * next gesture; every call asks the browser again. See the file header.
    */
   start(): Promise<void>;
   stop(): void;
   /** The honest state, "suspended" included. */
   readonly state: PrimeAudioState;
   readonly running: boolean;
+  /**
+   * Why there is no sound, in a sentence a player can read. Null while running.
+   *
+   * A shell puts this on the glass. "Suspended" means nothing to somebody who
+   * just wants the game to make a noise, and a status line that cannot say why
+   * is a status line that will eventually be silently wrong.
+   */
+  readonly reason: string | null;
   /** Silences the output without stopping the context or the simulation. */
   muted: boolean;
 }
@@ -815,6 +867,27 @@ const STEAL_MS = 8;
 
 /** How far ahead of `currentTime` a voice is scheduled, in seconds. */
 const LOOKAHEAD = 0.004;
+
+/**
+ * How long one `start()` waits for the context to come up, in milliseconds.
+ *
+ * This is a DEADLINE, not a delay: an attempt finishes the moment the context
+ * reports "running", and this is only how long it waits before concluding that
+ * the browser is not going to allow it yet. It exists because `resume()` outside
+ * a gesture never settles at all (see the file header), so something has to
+ * bound the wait or the attempt hangs and takes the next gesture down with it.
+ *
+ * A quarter of a second: far longer than a permitted resume takes, far shorter
+ * than the gap between two keypresses, so the gesture after a refusal always
+ * finds the mixer ready to be asked again.
+ */
+const RESUME_DEADLINE_MS = 250;
+
+/** What the shell says when the browser is holding the context back. */
+const WHY_SUSPENDED = "the browser needs a key or a click first";
+
+/** What the shell says where there is no WebAudio at all. */
+const WHY_UNAVAILABLE = "this browser has no Web Audio";
 
 type Ctor = new (options?: AudioContextOptions) => AudioContext;
 
@@ -868,7 +941,10 @@ export function createPrimeAudio(opts?: {
   let owned: AudioContext | null = null;
   let out: GainNode | null = null;
   let phase: PrimeAudioState = "stopped";
-  let starting: Promise<void> | null = null;
+  /** The attempt currently waiting on the browser. A WAIT to share, never an ask. */
+  let pending: Promise<void> | null = null;
+  /** Why there is no sound. See {@link PrimeAudio.reason}. */
+  let why: string | null = null;
   let mute = false;
 
   /** One noise buffer for the whole session. Deterministic, because it can be. */
@@ -877,6 +953,28 @@ export function createPrimeAudio(opts?: {
   const waves = new Map<number, PeriodicWave>();
   /** What is sounding on each channel, so a new effect can take it. */
   const busy = new Map<number, { gain: GainNode; stop: (t: number) => void }>();
+
+  // --- The song -----------------------------------------------------------
+  // See `music.ts`. Three things are worth knowing here rather than there:
+  //
+  //   1. THE REQUEST IS LATCHED. A cart calls `snd.music` from its first tick,
+  //      which on a browser is long before any gesture has let the context
+  //      start. A mixer that dropped that call would be a console whose music
+  //      never begins, because the cart only calls again when the BAND changes
+  //      -- which on levels 1-3 is never. So the wanted track is remembered and
+  //      applied the moment the context comes up.
+  //   2. THE SCHEDULER IS DRIVEN BY A TIMER, not by the simulation. Music is
+  //      not simulation: no cart can see a bar boundary, and the tick rate has
+  //      nothing to do with it.
+  //   3. A BORROWED CONTEXT IS PUMPED TO ITS END IN ONE GO. An
+  //      `OfflineAudioContext` has no wall clock for a timer to run on, so the
+  //      whole of it is scheduled at once -- which is exactly what makes the
+  //      mix measurable rather than merely asserted.
+  let sched: MusicScheduler | null = null;
+  /** The track the cart last asked for, -1 for none. Survives a suspended context. */
+  let wantTrack = -1;
+  let wantFade = MUSIC_FADE_FRAMES;
+  let pumpTimer: ReturnType<typeof globalThis.setInterval> | null = null;
 
   function noise(c: BaseAudioContext): AudioBuffer {
     if (noiseBuf !== null) return noiseBuf;
@@ -1052,6 +1150,64 @@ export function createPrimeAudio(opts?: {
   }
 
   /**
+   * How far ahead the song is built.
+   *
+   * On a live context, a lookahead the pump timer can comfortably cover. On a
+   * BORROWED one -- an `OfflineAudioContext` -- the whole render, because there
+   * is no wall clock to drive a timer with and a measurement that scheduled
+   * half a bar would measure half a bar.
+   */
+  function musicHorizon(c: BaseAudioContext): number {
+    const len = (c as unknown as { length?: number }).length;
+    if (borrowed !== null && typeof len === "number" && len > 0) return len / c.sampleRate + 0.01;
+    return c.currentTime + MUSIC_LOOKAHEAD_S;
+  }
+
+  /** Build the scheduler on demand and put the latched request into effect. */
+  function applyMusic(): void {
+    const c = ctx;
+    const dest = out;
+    if (c === null || dest === null || phase !== "running") return;
+    if (sched === null) sched = createMusicScheduler(c, dest);
+    if (wantTrack < 0) sched.stop(wantFade);
+    else sched.play(wantTrack, wantFade);
+    sched.pump(musicHorizon(c));
+    if (borrowed === null && pumpTimer === null) {
+      pumpTimer = globalThis.setInterval(() => {
+        const cc = ctx;
+        if (cc === null || sched === null) return;
+        sched.pump(cc.currentTime + MUSIC_LOOKAHEAD_S);
+      }, MUSIC_PUMP_MS);
+    }
+  }
+
+  /**
+   * Take the matching music voice away for the length of an effect.
+   *
+   * THE INTERRUPTION RULE, and the one of the four that is a mechanic rather
+   * than a mix decision. The chip gave the song channels 2 and 3 and an effect
+   * claiming one simply took it; Prime has no voice budget, so the same thing
+   * has to be done on purpose. Channel 3 is the bass and channel 2 is the lead,
+   * which is why the alarm -- channel 3, like the deflection and every loss --
+   * drops the floor out from under itself for its whole 900 ms.
+   */
+  function duckFor(ch: number, at: number, ms: number): void {
+    if (sched === null) return;
+    const voice: MusicVoice | null = ch === 3 ? "bass" : ch === 2 ? "lead" : null;
+    if (voice === null) return;
+    sched.duck(voice, at, at + ms / 1000);
+  }
+
+  function stopPump(): void {
+    if (pumpTimer !== null) {
+      globalThis.clearInterval(pumpTimer);
+      pumpTimer = null;
+    }
+    sched?.dispose();
+    sched = null;
+  }
+
+  /**
    * The master chain: one gain, one limiter, the destination.
    *
    * A LIMITER, NOT A COMPRESSOR. Everything in the bank is short and transient
@@ -1074,6 +1230,7 @@ export function createPrimeAudio(opts?: {
 
   function teardown(): void {
     busy.clear();
+    stopPump();
     // A borrowed context is the caller's: its nodes, its lifetime, its close.
     if (borrowed !== null) return;
     noiseBuf = null;
@@ -1087,6 +1244,65 @@ export function createPrimeAudio(opts?: {
     }
   }
 
+  /** Build the context and the master chain, once. Throws where there is none. */
+  function graph(): AudioContext {
+    if (owned !== null) return owned;
+    const Ctx = audioContextCtor();
+    if (Ctx === null) throw new Error("prime audio: this environment has no AudioContext");
+    const c = new Ctx();
+    out = mount(c);
+    owned = c;
+    ctx = c;
+    return c;
+  }
+
+  /**
+   * Ask the browser to start the context. SYNCHRONOUS, and the return value is
+   * deliberately dropped.
+   *
+   * Synchronous because a browser decides whether a resume is allowed by looking
+   * at the task the call was made in, so this must run inside the gesture
+   * handler that called `start()` rather than after an await. Dropped because
+   * the promise is not an answer: outside a gesture Chrome never settles it.
+   * {@link reachRunning} watches the context instead.
+   */
+  function kick(c: AudioContext): void {
+    try {
+      void c.resume().catch(() => {});
+    } catch {
+      // Some engines throw synchronously on a context that has been closed.
+    }
+  }
+
+  /** Resolve when the context reports "running", or when the deadline passes. */
+  function reachRunning(c: AudioContext): Promise<void> {
+    if (c.state === "running") return Promise.resolve();
+    return new Promise<void>((done) => {
+      let timer: ReturnType<typeof globalThis.setTimeout> | undefined;
+      let finished = false;
+      const finish = (): void => {
+        if (finished) return;
+        finished = true;
+        if (timer !== undefined) globalThis.clearTimeout(timer);
+        try {
+          c.removeEventListener("statechange", onChange);
+        } catch {
+          // A context that has gone away has no listeners left to remove.
+        }
+        done();
+      };
+      const onChange = (): void => {
+        if (c.state === "running") finish();
+      };
+      try {
+        c.addEventListener("statechange", onChange);
+      } catch {
+        // No event target. The deadline below is then the whole mechanism.
+      }
+      timer = globalThis.setTimeout(finish, RESUME_DEADLINE_MS);
+    });
+  }
+
   async function begin(): Promise<void> {
     if (borrowed !== null) {
       // Nothing to wait for: a context handed in is already whatever it is, and
@@ -1096,52 +1312,68 @@ export function createPrimeAudio(opts?: {
         out = mount(borrowed);
       }
       phase = "running";
+      why = null;
+      // A track asked for before the mixer was up is a track that still wants
+      // playing. See the latch above.
+      applyMusic();
       return;
     }
-    const Ctx = audioContextCtor();
-    if (Ctx === null) {
-      phase = "stopped";
-      throw new Error("prime audio: this environment has no AudioContext");
-    }
+    let c: AudioContext;
     try {
-      if (owned === null) {
-        const c = new Ctx();
-        out = mount(c);
-        owned = c;
-        ctx = c;
-      }
-      await owned.resume();
+      c = graph();
+      kick(c);
     } catch (e) {
       teardown();
       phase = "stopped";
+      why = WHY_UNAVAILABLE;
       throw e;
     }
-    if (owned.state !== "running") {
-      // Autoplay policy. Keep the context and the graph: a later start() from a
-      // real gesture is then one resume() away.
+    await reachRunning(c);
+    if (owned !== c) {
+      // stop() ran while this attempt was waiting. Its context is gone; say so
+      // rather than reporting on a mixer that no longer exists.
+      phase = "stopped";
+      why = null;
+      throw new Error("prime audio: stopped while starting");
+    }
+    if (c.state !== "running") {
+      // Autoplay policy. Keep the context and the graph: the next start() is
+      // then one resume() away, and every start() makes that call itself.
       phase = "suspended";
+      why = WHY_SUSPENDED;
       throw new Error(
         "prime audio: the AudioContext is suspended. start() must be called from a user gesture.",
       );
     }
     phase = "running";
+    why = null;
+    applyMusic();
   }
 
   return {
     start(): Promise<void> {
       if (phase === "running") return Promise.resolve();
-      if (starting !== null) return starting;
+      if (pending !== null) {
+        // An attempt is already waiting on the browser -- but THIS call may be
+        // the very gesture it is waiting for, and a browser looks at the task
+        // the resume() was made in. So ask again from here and share only the
+        // wait. Returning the earlier promise WITHOUT asking again is precisely
+        // the bug that left this console silent; see the file header.
+        if (owned !== null) kick(owned);
+        return pending;
+      }
       phase = "starting";
       const p = begin().finally(() => {
-        starting = null;
+        pending = null;
       });
-      starting = p;
+      pending = p;
       return p;
     },
 
     stop(): void {
       teardown();
       phase = "stopped";
+      why = null;
     },
 
     play(id: number, o?: SndOpts): void {
@@ -1152,6 +1384,9 @@ export function createPrimeAudio(opts?: {
       if (spec === undefined) return;
       const at = c.currentTime + LOOKAHEAD;
       steal(spec.ch, at);
+      // Channels are an interruption rule, and the song obeys it too: an effect
+      // on a music channel takes the voice for as long as it sounds.
+      duckFor(spec.ch, at, BANK_INFO[id | 0]?.ms ?? 0);
 
       const voice = c.createGain();
       voice.gain.value = o?.gain !== undefined && o.gain >= 0 ? o.gain : 1;
@@ -1203,17 +1438,29 @@ export function createPrimeAudio(opts?: {
     },
 
     /**
-     * Prime ships no music bank in this slice.
+     * Start a band. See `music.ts` for the score and the scheduler.
      *
-     * The method exists because the ABI has it and a cart may call it; it is a
-     * no-op rather than a stub that logs, because the honest statement is "this
-     * console has no music yet", and `modules/redsound`'s three bands are
-     * written for a four-channel chip rather than for this synthesiser. The
-     * recording backend still records the call, so a cart that starts music can
-     * be tested before there is anything to hear.
+     * **The request is latched.** A cart calls this once per band change, and
+     * the first call happens on the first tick -- before any gesture, on a
+     * browser that will not start a context until it gets one. So what happens
+     * here is that the console REMEMBERS which band should be playing, and the
+     * scheduler picks it up the moment the context runs. A mixer that dropped
+     * the call would be silent for levels 1 to 3 and then mysteriously start.
+     *
+     * Asking for the band that is already playing does nothing, which is what
+     * lets the cart assert the band every tick instead of tracking edges twice.
      */
-    music(): void {},
-    stopMusic(): void {},
+    music(id: number, fade?: number): void {
+      wantTrack = id | 0;
+      wantFade = fade !== undefined && fade >= 0 ? fade : MUSIC_FADE_FRAMES;
+      applyMusic();
+    },
+
+    stopMusic(fade?: number): void {
+      wantTrack = -1;
+      wantFade = fade !== undefined && fade >= 0 ? fade : MUSIC_FADE_FRAMES;
+      if (sched !== null) sched.stop(wantFade);
+    },
 
     get state(): PrimeAudioState {
       return phase;
@@ -1221,6 +1468,14 @@ export function createPrimeAudio(opts?: {
 
     get running(): boolean {
       return phase === "running";
+    },
+
+    get reason(): string | null {
+      if (phase === "running") return null;
+      // Never null while there is no sound: a shell that has to guess is a shell
+      // that will print something wrong. Before the first attempt the honest
+      // answer is whether this environment could make a sound at all.
+      return why ?? (audioContextCtor() === null ? WHY_UNAVAILABLE : WHY_SUSPENDED);
     },
 
     get muted(): boolean {

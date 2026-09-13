@@ -29,17 +29,42 @@ The ball is `NORMAL` or `RED` — bit 1 of its flags byte.
 
 1. Breaking a **type-4 block** sets the ball `RED`.
 2. While `RED`, and only then, a red beam is drawn **below the paddle**.
-3. `RED` ball touches the **paddle** → paddle destroyed, life lost, ball `NORMAL`.
-4. `RED` ball touches **anything else** — wall, ceiling, block, the beam, a shot
-   → it bounces normally and returns to `NORMAL`.
+3. `RED` ball touches the **paddle** → paddle destroyed, life lost, ball gone.
+4. `RED` ball meets a **breakable block** — types 1, 2, 3, 4, 8 — and **passes
+   through it**, destroying it outright whatever it had left, without deflecting.
+   It keeps going and it **stays `RED`**.
+5. Walls and the ceiling bounce it, and it **stays `RED`**.
+6. **Solid and shielded blocks bounce it**, and it **stays `RED`**.
+7. `RED` ball touches the **beam** → it deflects **and** returns to `NORMAL`.
+   **That is the only thing that clears it.**
 
-The player has to do the opposite of everything the rest of the game teaches and
-**get the paddle out of the way for one contact.**
+**A red ball is a wrecking ball, and it is clearing the level for you.** So the
+player wants it alive and wants it nowhere near the paddle — which is still the
+opposite of everything the rest of the game teaches, but the other way round:
+you steer away from your own ball, and let the beam catch it when you are done.
 
-**Rules 3 and 4 are one rule in the code, not two.** Every contact that is not
-the paddle goes through `bounce()`, whose last act is to clear bit 1; the paddle
-is the one contact that never calls `bounce()` at all. They cannot drift apart,
-because they are a check and its complement.
+That is why rule 6 exists. Types 5 and 6 are the *designer's structure* rather
+than his contents; a red ball that ate them would clear level 8's shielded wall,
+which is the one level built to **require** the gun. So they deflect it, and
+level 8 still needs shooting.
+
+**The clear is one function with one caller.** `deflect()` is the only code in
+`engine.js` that masks bit 1 off a live ball, and the beam branch of `contact()`
+is its only caller. `bounce()` — every wall, every ceiling, every deflecting
+block — does not touch the flags byte at all, so a contact added later gets rule
+5 for free and *cannot* clear a red ball by accident. `engine.test.ts` counts
+the mask in the source and requires exactly one, which is what stops the single
+writer quietly becoming two.
+
+**A third state** — if the beam is ever to leave the ball as something other
+than `NORMAL` — is written inside `deflect()` and nowhere else. It is the whole
+of what a deflection does to a ball, so nothing above it needs restructuring.
+
+**Rule 4 and rule 6 are also one decision.** `damage()` answers *whether the
+ball must bounce off this block*, because what is left of a block and whether it
+stopped you are the same question asked twice. Solid and shielded return "bounce"
+before the red test is ever reached, so rule 6 wins without rule 4 knowing it
+exists; everything else takes its last hit at once and returns "go through".
 
 **The beam is not a floor.** `contact()` tests the beam only when bit 1 is set,
 so a normal ball falls straight through it and is lost. Softening that would
@@ -79,8 +104,8 @@ multi, life, catch. A `RED` ball does not stop them falling.
 **Shooting** exists two ways. The `gun` drop grants `gun_shots`, and where the
 header sets `SIDE_PADS` the paddle charges one shot each time it arrives at a
 side pad — arriving, not parking. A type-6 block breaks only to a shot, so on
-those levels shooting is required rather than optional, and a shot also clears a
-`RED` ball, which is the skilled way out of the panic window.
+those levels shooting is required rather than optional. A shot does **not** clear
+a red ball — rule 7 makes the beam the only clear, so the gun is only a gun.
 
 ---
 
@@ -190,8 +215,8 @@ thing at a time and therefore *which cue may interrupt which* is a mechanic:
 `sfx_lose` once, and the sound could not tell the player which had happened.
 Effect 12 is now the paddle and effect 13 the ball.
 
-**The wall cue is not inside `bounce()`.** Every contact in the game passes
-through `bounce` — a block, the beam, both walls, the ceiling — so a cue placed
+**The wall cue is not inside `bounce()`.** Every deflection in the game passes
+through `bounce` — a solid block, the beam, both walls, the ceiling — so a cue placed
 there would play the wall on top of every block hit and every deflection. `edge()`
 is the wall-and-ceiling half, and it is the only caller that sounds effect 3.
 Effects 0, 2 and 3 separate on register, waveform and direction precisely so a

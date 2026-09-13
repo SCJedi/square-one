@@ -6,6 +6,14 @@
  * ABI, it says so and says why -- twice, both times because the ABI's literal
  * wording would let a cart write the arena from `render`, which is the one
  * thing the whole architecture exists to prevent.
+ *
+ * `render` takes a fourth argument, {@link Ui}, and it is the one place a cart
+ * may ask a DEVICE-DEPENDENT question: what this console calls a button, so a
+ * prompt can name the key the player is actually holding. It is safe there and
+ * nowhere else, because `ui` is render-only and `render` can neither write the
+ * arena nor make a sound -- a string that differs between a keyboard and a
+ * gamepad therefore cannot reach the simulation. It is non-normative BY
+ * CONSTRUCTION rather than by promise.
  */
 
 import { ARENA_BYTES, createArena } from "./arena";
@@ -152,6 +160,78 @@ export interface Draw {
 }
 
 // ---------------------------------------------------------------------------
+// Ui
+// ---------------------------------------------------------------------------
+
+/**
+ * What THIS console calls its buttons, so a cart can name one on screen.
+ *
+ * A CART CANNOT KNOW WHICH KEY IS BOUND TO A BUTTON, and it must never guess. A
+ * binding belongs to the console: it differs between a keyboard, a gamepad and a
+ * touch surface, it differs between layouts, and a player may remap it. A prompt
+ * that hard-codes one is wrong on every device but the one it was typed on --
+ * "PRESS A TO SERVE" on a keyboard whose serve is Z and whose A key moves LEFT
+ * names a key that does the opposite of what the sentence says.
+ *
+ * It is the same line the small console draws when it says touch controls are
+ * hardware and not cart code. The cart names the BUTTON; the console answers
+ * with the label the player is looking at.
+ *
+ * `ui` IS RENDER-ONLY, AND THEREFORE NON-NORMATIVE BY CONSTRUCTION. It is handed
+ * to `render` and to nothing else, and `render` can neither write the arena nor
+ * make a sound -- so a string that differs between a keyboard and a gamepad
+ * cannot reach the simulation, cannot move the state hash, and cannot change
+ * what a replay does. That is exactly why a device-dependent value is safe here
+ * and would not be safe in `tick`.
+ */
+export interface Ui {
+  /** What the current input device calls this button. "Z", "A", "(X)". */
+  label(button: number): string;
+}
+
+/**
+ * The ABI's own button names, in bit order. The fallback every console can give.
+ *
+ * A runtime that knows nothing about its input device still answers something
+ * true -- the name of the button in `spec/PRIME-ABI.md` -- rather than the name
+ * of a key it has not got.
+ */
+const BUTTON_NAME: readonly string[] = Object.freeze([
+  "UP",
+  "DOWN",
+  "LEFT",
+  "RIGHT",
+  "A",
+  "B",
+  "X",
+  "Y",
+  "L",
+  "R",
+  "L2",
+  "R2",
+  "L3",
+  "R3",
+  "SELECT",
+  "START",
+]);
+
+/**
+ * A {@link Ui} that answers with the ABI's button names.
+ *
+ * The default for {@link createMachine}, so a headless conformance run builds a
+ * machine exactly as it always did and a cart is never handed `undefined`. A
+ * shell that knows its bindings installs its own -- see `player.ts`, which
+ * derives one from `KEYMAP` so it cannot drift from what the keys actually do.
+ */
+export function defaultUi(): Ui {
+  return Object.freeze({
+    label(button: number): string {
+      return BUTTON_NAME[button | 0] ?? `BUTTON ${button | 0}`;
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Snd
 // ---------------------------------------------------------------------------
 
@@ -268,6 +348,11 @@ export interface SimRead {
  * on the presentation clock, so a sound emitted from it fires once per PRESENTED
  * FRAME rather than once per event -- two to four times per impact on a fast
  * display, on exactly the hardware that was supposed to make the game better.
+ *
+ * `ui` goes the other way and for the mirror-image reason. See {@link Ui}: what
+ * a button is CALLED depends on the device in the player's hands, so it may only
+ * be asked for where the answer cannot reach the simulation -- which is `render`
+ * and nowhere else.
  */
 export interface PrimeCart {
   /** Once. The arena is zeroed; install initial state here. */
@@ -275,7 +360,7 @@ export interface PrimeCart {
   /** Exactly once per simulated tick, at a fixed 60 Hz. MAY write the arena. */
   tick(sim: Sim, input: InputFrame, snd: Snd): void;
   /** Zero or more times per tick, on the presentation clock. MUST NOT write the arena. */
-  render(sim: SimRead, draw: Draw, alpha: number): void;
+  render(sim: SimRead, draw: Draw, alpha: number, ui: Ui): void;
 }
 
 // ---------------------------------------------------------------------------
@@ -328,8 +413,17 @@ export interface Machine {
  * EITHER WAY -- a backend cannot write the arena, cannot be read by the cart,
  * and cannot move the state hash. `sim.test.ts` asserts that with two machines
  * whose only difference is the backend.
+ *
+ * `ui` defaults to {@link defaultUi} and is the same kind of thing: a host facade
+ * the cart may ask questions of, reachable only from `render`, and therefore
+ * unable to move the state hash either. Two machines differing only in their
+ * `ui` produce the same arena, and the suite asserts that too.
  */
-export function createMachine(cart: PrimeCart, snd: Snd = nullSnd()): Machine {
+export function createMachine(
+  cart: PrimeCart,
+  snd: Snd = nullSnd(),
+  ui: Ui = defaultUi(),
+): Machine {
   const arena = createArena();
   const view = arena.view;
 
@@ -444,6 +538,23 @@ export function createMachine(cart: PrimeCart, snd: Snd = nullSnd()): Machine {
     },
   });
 
+  /**
+   * The console's labels, behind a frozen facade, for the same two reasons
+   * `cartSnd` is one: a cart must not be able to remember anything on a host
+   * object, and the host's own `Ui` is the host's to own.
+   *
+   * The answer is coerced to a string here rather than trusted. A `label` that
+   * returned an object would put a host value into `draw.text`, and the one
+   * thing this seam exists to guarantee is that nothing device-dependent gets
+   * further than the glass.
+   */
+  const cartUi: Ui = Object.freeze({
+    label(button: number): string {
+      const s = ui.label(button | 0);
+      return typeof s === "string" ? s : "";
+    },
+  });
+
   /** The same object minus the two methods that write. Frozen for the same reason. */
   const simRead: SimRead = Object.freeze({
     get tick(): bigint {
@@ -528,11 +639,11 @@ export function createMachine(cart: PrimeCart, snd: Snd = nullSnd()): Machine {
         throw new Error(`present: alpha must be in [0, 1), got ${alpha}`);
       }
       if (!devChecks) {
-        cart.render(simRead, drawList, alpha);
+        cart.render(simRead, drawList, alpha, cartUi);
         return;
       }
       const token = arena.seal();
-      cart.render(simRead, drawList, alpha);
+      cart.render(simRead, drawList, alpha, cartUi);
       if (!arena.verify(token)) {
         throw new Error(
           "present: render wrote to the arena. `render` MUST NOT write simulation " +

@@ -627,6 +627,20 @@ describe("the breakout engine as a cart", () => {
     expect([...declared].filter((k) => !used.has(k)).sort(), "declared but never read").toEqual([]);
   });
 
+  it("clears the RED bit in exactly one place, which is the beam", () => {
+    // THE STRUCTURAL GUARANTEE BEHIND RULE 7. `bounce` no longer touches the
+    // flags byte, so the only way any contact can clear a red ball is to call
+    // `deflect` -- and there is one of those, in the beam's branch of
+    // `contact`. Counting the mask in the source is what stops a contact added
+    // later from quietly growing a second one, which is exactly how the old
+    // rule's "one check and its complement" would have decayed.
+    const masks = [...ENGINE_SRC.matchAll(/&\s*253/g)];
+    expect(masks.length, "writes that mask bit 1 off a ball").toBe(1);
+    const named = [...ENGINE_SRC.matchAll(/deflect\(b\)/g)];
+    expect(named.length, "`deflect(b)`: one declaration and one call").toBe(2);
+    expect(/function deflect\(b\) \{\s*sys\.poke\(b \+ B_F[^}]*253/.test(ENGINE_SRC)).toBe(true);
+  });
+
   it("gives every knob a doc and a default", () => {
     // A knob without a sentence saying what it does is a magic number with a
     // longer name. And this engine binds to no art pack, so nothing about it
@@ -912,37 +926,79 @@ describe("the red ball", () => {
     expect(m.ram[G_PADW], "the paddle is rebuilt at the header's width").toBe(padWidthOf(0));
   });
 
-  it("bounces off a wall and clears, rather than costing anything", () => {
+  // RULE 4: THE WRECKING BALL. A red ball is not dangerous for one contact any
+  // more -- it is CLEARING THE LEVEL, and the player wants it alive.
+  it("PLOUGHS a plain block: the block goes and the ball does not turn", () => {
+    const m = field(boot());
+    movePaddle(m, 0);
+    setBlock(m, 5, 8, 1, 1);
+    freeBall(m, 65, TOP + 6 * BH + 1, 0, -SUB, true);
+    run(m, 2);
+    expect(blockAt(m, 5, 8), "the block is gone").toBe(0);
+    expect(r16(m, ball(0) + B_VY), "and the ball never turned").toBe(-SUB);
+    expect(redBall(m), "and it is still RED").toBe(2);
+  });
+
+  it("takes a three-hit block out in ONE pass, whatever it had left", () => {
+    // The hits are the block's defence against a normal ball. A red ball does
+    // not spend them one at a time, it takes the block.
+    const m = field(boot());
+    movePaddle(m, 0);
+    setBlock(m, 5, 8, 3, 3);
+    freeBall(m, 65, TOP + 6 * BH + 1, 0, -SUB, true);
+    run(m, 2);
+    expect(blockAt(m, 5, 8), "all three hits at once").toBe(0);
+    expect(r16(m, ball(0) + B_VY), "and it kept going").toBe(-SUB);
+    expect(redBall(m)).toBe(2);
+  });
+
+  it("stays RED through a whole column of blocks", () => {
+    const m = field(boot());
+    movePaddle(m, 0);
+    for (let r = 2; r <= 6; r++) setBlock(m, r, 8, 1, 1);
+    freeBall(m, 65, TOP + 7 * BH + 1, 0, -SUB, true);
+    run(m, 34);
+    for (let r = 2; r <= 6; r++) expect(blockAt(m, r, 8), `row ${r} was ploughed`).toBe(0);
+    expect(redBall(m), "and it came out the far side still RED").toBe(2);
+  });
+
+  it("bounces off a wall and STAYS RED", () => {
     const m = field(boot());
     movePaddle(m, 0);
     freeBall(m, 1, 60, -SUB, 0, true);
     expect(untilBounce(m, 0)).toBeGreaterThan(0);
     expect(bx(m)).toBe(0);
     expect(r16(m, ball(0) + B_VX), "bounced").toBeGreaterThan(0);
-    expect(redBall(m), "and cleared").toBe(0);
+    expect(redBall(m), "and kept its colour").toBe(2);
     expect(m.ram[G_LIVES], "no life lost").toBe(LIVES);
   });
 
-  it("bounces off the ceiling and clears", () => {
+  it("bounces off the ceiling and STAYS RED", () => {
     const m = field(boot());
     movePaddle(m, 0);
     freeBall(m, 60, CEIL + 2, 0, -SUB, true);
     expect(untilBounce(m, 1)).toBeGreaterThan(0);
     expect(by(m)).toBe(CEIL);
-    expect(redBall(m)).toBe(0);
+    expect(redBall(m)).toBe(2);
   });
 
-  it("bounces off a block and clears", () => {
-    const m = field(boot());
-    movePaddle(m, 0);
-    setBlock(m, 5, 8, 5, 1); // solid, so nothing else changes
-    freeBall(m, 65, TOP + 6 * BH + 1, 0, -SUB, true);
-    run(m, 2);
-    expect(r16(m, ball(0) + B_VY)).toBeGreaterThan(0);
-    expect(redBall(m)).toBe(0);
+  it("bounces off a SOLID and a SHIELDED block, and STAYS RED", () => {
+    // RULE 6, which is what keeps level eight's shielded wall standing: if a
+    // red ball ate those two, the one level built to REQUIRE the gun would
+    // clear itself.
+    for (const t of [5, 6]) {
+      const m = field(boot());
+      movePaddle(m, 0);
+      setBlock(m, 5, 8, t, 1);
+      freeBall(m, 65, TOP + 6 * BH + 1, 0, -SUB, true);
+      run(m, 2);
+      expect(blockAt(m, 5, 8) & 15, `type ${t} still stands`).toBe(t);
+      expect(r16(m, ball(0) + B_VY), "and the ball came back down").toBeGreaterThan(0);
+      expect(redBall(m), "still RED").toBe(2);
+    }
   });
 
-  it("is deflected by the beam, which clears it", () => {
+  it("is deflected by the beam, WHICH IS THE ONLY THING THAT CLEARS IT", () => {
     // The player's escape: move the paddle aside and let the beam take it.
     const m = field(boot());
     movePaddle(m, 0);
@@ -956,18 +1012,50 @@ describe("the red ball", () => {
     expect(m.ram[G_LIVES]).toBe(LIVES);
   });
 
-  it("is cleared by a shot, which is the skilled way out", () => {
+  it("is not touched by a shot", () => {
+    // A shot used to be the skilled way out of the panic window. Rule 7 made
+    // the beam the only clear, so the gun is a gun and the shot goes past.
     const m = field(boot());
     movePaddle(m, 56);
     m.ram[G_AMMO] = 1;
     freeBall(m, 66, 60, 0, 0, true);
     run(m, 1); // a frame with nothing held, so btnp sees a new press
     run(m, 1, BTN_B);
-    expect(m.ram[G_AMMO], "the shot was spent").toBe(0);
+    expect(m.ram[G_AMMO], "the shot was fired").toBe(0);
     run(m, 20);
-    expect(redBall(m), "the shot cleared the red ball").toBe(0);
-    expect(m.ram[ball(0) + B_F]! & 1, "and the ball survived").toBe(1);
+    expect(redBall(m), "and it did nothing to the red ball").toBe(2);
+    expect(m.ram[ball(0) + B_F]! & 1, "which is still in play").toBe(1);
     expect(m.ram[G_LIVES]).toBe(LIVES);
+  });
+
+  it("keeps its colour through contact after contact, and loses it only to the beam", () => {
+    // Rule 7 stated as one run of assertions, because it is the rule the rest
+    // of the engine has to keep out of the way of.
+    const m = field(boot());
+    movePaddle(m, 0);
+
+    setBlock(m, 5, 8, 1, 1);
+    freeBall(m, 65, TOP + 6 * BH + 1, 0, -SUB, true);
+    run(m, 2);
+    expect(redBall(m), "after ploughing a block").toBe(2);
+
+    freeBall(m, 60, CEIL + 2, 0, -SUB, true);
+    run(m, 3);
+    expect(redBall(m), "after the ceiling").toBe(2);
+
+    freeBall(m, 1, 60, -SUB, 0, true);
+    run(m, 3);
+    expect(redBall(m), "after a wall").toBe(2);
+
+    setBlock(m, 5, 8, 5, 1);
+    freeBall(m, 65, TOP + 6 * BH + 1, 0, -SUB, true);
+    run(m, 2);
+    expect(redBall(m), "after a solid block").toBe(2);
+
+    freeBall(m, 100, BEAMY - BS - 2, 0, SUB, true);
+    let guard = 0;
+    while (r16(m, ball(0) + B_VY) > 0 && guard++ < 30) run(m, 1);
+    expect(redBall(m), "and ONLY the beam cleared it").toBe(0);
   });
 });
 
@@ -1969,6 +2057,32 @@ describe("state containment", () => {
     let firstRam = -1;
     for (let i = 0; i < ramA.length && firstRam < 0; i++) if (ramA[i] !== ramB[i]) firstRam = i;
     expect(firstRam, "first differing RAM byte after a restore").toBe(-1);
+  });
+
+  it("rewinds byte-for-byte with a RED ball mid-plough", () => {
+    // A snapshot taken WHILE the wrecking ball is inside a wall: the block
+    // grid, the effect pool and the ball's own flags all change on every tick
+    // of the restored run, so a byte that escaped the 64 KB would show here.
+    const m = field(boot());
+    movePaddle(m, 0);
+    for (let r = 2; r <= 8; r++) for (let c = 5; c <= 10; c++) setBlock(m, r, c, 1, 1);
+    freeBall(m, 65, TOP + 8 * BH, 0, -SUB, true);
+    run(m, 4);
+    expect(m.ram[ball(0) + B_F]! & 2, "a RED ball, inside the wall").toBe(2);
+
+    const snap = m.snapshot();
+    const leg = (): Uint8Array => {
+      play(m, 0, 40);
+      m.present();
+      return m.snapshot();
+    };
+    const a = leg();
+    m.restore(snap);
+    const b = leg();
+
+    let first = -1;
+    for (let i = 0; i < a.length && first < 0; i++) if (a[i] !== b[i]) first = i;
+    expect(first, "first differing RAM byte after a restore").toBe(-1);
   });
 
   /**

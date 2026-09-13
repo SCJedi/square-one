@@ -26,6 +26,7 @@ import {
   createRecordingSnd,
   noteHz,
 } from "../src/audio";
+import { MUSIC_CEILING, SCORE_INFO } from "../src/music";
 import { createMachine, emptyInput, nullSnd } from "../src/sim";
 import type { PrimeCart } from "../src/sim";
 
@@ -206,6 +207,55 @@ describe("noteHz", () => {
   });
 });
 
+describe("rule two, now that there is also a song", () => {
+  it("leaves the alarm the only saw in the console, music included", () => {
+    // The bank's claim above is only half of it once a soundtrack exists. A
+    // waveform used by one warning and nothing else is a channel of its own,
+    // and a song that joined in would spend it -- so the score's own published
+    // shape is checked against the bank here rather than only in `music.test.ts`,
+    // because this is the file that says what the alarm owns.
+    const scoreWaves = new Set(SCORE_INFO.flatMap((b) => b.waves));
+    expect(scoreWaves.has("sawtooth")).toBe(false);
+    expect(scoreWaves.has("noise")).toBe(false);
+    expect(BANK_INFO[SFX.RED]?.waves).toContain("sawtooth");
+  });
+
+  it("keeps the whole song below the alarm's lowest note", () => {
+    // B5 is 71 and the score's ceiling is A5 at 69: a whole tone, and not one
+    // semitone shared. Nothing for the song to mask the alarm WITH.
+    expect(MUSIC_CEILING).toBe(69);
+    expect(Math.min(...(BANK_NOTES[SFX.RED] ?? [0]))).toBe(71);
+    expect(MUSIC_CEILING).toBeLessThan(Math.min(...(BANK_NOTES[SFX.RED] ?? [0])));
+  });
+
+  it("leaves the song's channels to the song, and the busy ones to the engine", () => {
+    // The interruption rule is a wiring claim before it is a mixing one. The
+    // three that fire constantly are on channels 0 and 1, which the song never
+    // touches; a bed on those would be shredded several times a second.
+    for (const id of [SFX.HIT, SFX.PADDLE, SFX.WALL]) {
+      expect([0, 1]).toContain(BANK_INFO[id]?.ch);
+    }
+    // And the alarm is on 3, the bass's channel, which is why the floor goes.
+    expect(BANK_INFO[SFX.RED]?.ch).toBe(3);
+  });
+});
+
+describe("the mixer's music methods, before there is a mixer", () => {
+  it("accepts a band and a stop without an AudioContext anywhere", () => {
+    // A cart asks for its band on the first tick. That is long before any
+    // gesture, and on a headless runner there is no WebAudio at all -- so both
+    // calls have to be safe, and the request has to survive being early.
+    const a = createPrimeAudio();
+    expect(() => {
+      a.music(0);
+      a.music(2, 12);
+      a.stopMusic();
+      a.stopMusic(0);
+    }).not.toThrow();
+    expect(a.running).toBe(false);
+  });
+});
+
 describe("the recording backend", () => {
   it("records what was played, in order, with the tick that played it", () => {
     const seen: number[] = [];
@@ -365,3 +415,275 @@ function turns(notes: readonly number[]): number {
   }
   return n;
 }
+
+// ---------------------------------------------------------------------------
+// The autoplay lifecycle, against a browser that behaves like the real one
+// ---------------------------------------------------------------------------
+
+/**
+ * A fake `AudioContext` whose `resume()` BEHAVES LIKE CHROME'S.
+ *
+ * This is the whole point of the fake and the reason the suite could not catch
+ * the bug without one. Chrome does not REJECT a `resume()` made outside a user
+ * gesture -- the documentation implies a refusal, and what actually happens is
+ * that the promise is left PENDING, forever, while `state` stays "suspended".
+ *
+ * Node has no `AudioContext` at all, so every WebAudio test above runs the
+ * "there is none" path and the lifecycle was never exercised by anything but a
+ * human with a browser. A mixer that awaited that promise hung at "starting" for
+ * the rest of the session, its in-flight guard handed every later gesture the
+ * same dead promise, `resume()` was never called a second time, and the console
+ * played nothing while reporting that it was starting. Those are the properties
+ * asserted below.
+ */
+class FakeParam {
+  value = 0;
+  setValueAtTime(): this {
+    return this;
+  }
+  linearRampToValueAtTime(): this {
+    return this;
+  }
+  exponentialRampToValueAtTime(): this {
+    return this;
+  }
+  cancelScheduledValues(): this {
+    return this;
+  }
+}
+
+class FakeNode {
+  gain = new FakeParam();
+  frequency = new FakeParam();
+  detune = new FakeParam();
+  Q = new FakeParam();
+  threshold = new FakeParam();
+  knee = new FakeParam();
+  ratio = new FakeParam();
+  attack = new FakeParam();
+  release = new FakeParam();
+  type = "";
+  buffer: unknown = null;
+  loop = false;
+  constructor(readonly ctx: FakeContext) {}
+  connect(dest: unknown): unknown {
+    if (dest === this.ctx.destination) this.ctx.destinationConnects++;
+    return dest;
+  }
+  disconnect(): void {}
+  setPeriodicWave(): void {}
+  start(): void {
+    this.ctx.started++;
+  }
+  stop(): void {}
+}
+
+class FakeContext {
+  state: "suspended" | "running" | "closed" = "suspended";
+  /** Flip to true to model a page the browser has decided to allow. */
+  allow = false;
+  /** Every resume() this context was asked for. The count is the assertion. */
+  resumes = 0;
+  destinationConnects = 0;
+  started = 0;
+  closed = false;
+  sampleRate = 48000;
+  currentTime = 0;
+  destination = { id: "destination" };
+  private listeners: (() => void)[] = [];
+
+  resume(): Promise<void> {
+    this.resumes++;
+    if (!this.allow) {
+      // CHROME. Not a rejection, not a resolution -- nothing, ever.
+      return new Promise<void>(() => {});
+    }
+    this.state = "running";
+    for (const l of [...this.listeners]) l();
+    return Promise.resolve();
+  }
+  close(): Promise<void> {
+    this.closed = true;
+    this.state = "closed";
+    return Promise.resolve();
+  }
+  addEventListener(_: string, fn: () => void): void {
+    this.listeners.push(fn);
+  }
+  removeEventListener(_: string, fn: () => void): void {
+    this.listeners = this.listeners.filter((l) => l !== fn);
+  }
+  createGain(): FakeNode {
+    return new FakeNode(this);
+  }
+  createDynamicsCompressor(): FakeNode {
+    return new FakeNode(this);
+  }
+  createOscillator(): FakeNode {
+    return new FakeNode(this);
+  }
+  createBiquadFilter(): FakeNode {
+    return new FakeNode(this);
+  }
+  createBufferSource(): FakeNode {
+    return new FakeNode(this);
+  }
+  createPeriodicWave(): object {
+    return {};
+  }
+  createBuffer(_c: number, n: number): { getChannelData: () => Float32Array } {
+    const d = new Float32Array(n);
+    return { getChannelData: () => d };
+  }
+}
+
+/** Install the fake as `globalThis.AudioContext` for the body of one test. */
+async function withFakeAudio(
+  body: (made: FakeContext[]) => Promise<void> | void,
+): Promise<void> {
+  const g = globalThis as unknown as Record<string, unknown>;
+  const had = Object.prototype.hasOwnProperty.call(g, "AudioContext");
+  const before = g["AudioContext"];
+  const made: FakeContext[] = [];
+  g["AudioContext"] = class extends FakeContext {
+    constructor() {
+      super();
+      made.push(this);
+    }
+  };
+  try {
+    await body(made);
+  } finally {
+    if (had) g["AudioContext"] = before;
+    else delete g["AudioContext"];
+  }
+}
+
+describe("the WebAudio backend, against a browser that holds the context", () => {
+  it("SETTLES, even though resume() never does", async () => {
+    // THE REGRESSION. `start()` used to be `await ctx.resume()`, and against a
+    // promise that never settles that call never returns. A test that awaits it
+    // hangs exactly as the console did.
+    await withFakeAudio(async (made) => {
+      const a = createPrimeAudio();
+      const t0 = Date.now();
+      await expect(a.start()).rejects.toThrow(/suspended|gesture/i);
+      expect(Date.now() - t0).toBeLessThan(5000);
+      expect(made.length).toBe(1);
+      expect(made[0]?.resumes).toBe(1);
+      // Honest, and not "starting": a state a shell would print forever.
+      expect(a.state).toBe("suspended");
+      expect(a.running).toBe(false);
+      // The context and its graph are KEPT, so the next gesture is one resume
+      // away rather than a rebuild.
+      expect(made[0]?.closed).toBe(false);
+      expect(made[0]?.destinationConnects).toBeGreaterThan(0);
+    });
+  });
+
+  it("asks the browser AGAIN on the next start, and comes up", async () => {
+    // The second half of the bug: the first attempt latched its pending promise
+    // and every later start() returned it without calling resume() again. The
+    // gesture then did nothing at all.
+    await withFakeAudio(async (made) => {
+      const a = createPrimeAudio();
+      await expect(a.start()).rejects.toThrow();
+      const ctx = made[0] as FakeContext;
+      expect(ctx.resumes).toBe(1);
+
+      // The player presses a key. The browser now allows it.
+      ctx.allow = true;
+      await expect(a.start()).resolves.toBeUndefined();
+      expect(ctx.resumes).toBe(2);
+      expect(a.state).toBe("running");
+      expect(a.running).toBe(true);
+      expect(a.reason).toBeNull();
+      // One context for the session, not one per attempt.
+      expect(made.length).toBe(1);
+    });
+  });
+
+  it("asks again even while an earlier attempt is still waiting", async () => {
+    // The exact shape of the failure a player produces: the page calls start()
+    // on load, it hangs, and the FIRST key arrives while it is still in flight.
+    // Sharing that attempt's WAIT is right; sharing its ASK is the defect -- a
+    // browser decides from the task the resume() was made in, so the gesture has
+    // to make its own call.
+    await withFakeAudio(async (made) => {
+      const a = createPrimeAudio();
+      const onLoad = a.start();
+      onLoad.catch(() => {});
+      const ctx = made[0] as FakeContext;
+      expect(ctx.resumes).toBe(1);
+      expect(a.state).toBe("starting");
+
+      ctx.allow = true;
+      const fromGesture = a.start();
+      expect(ctx.resumes).toBe(2);
+
+      await expect(fromGesture).resolves.toBeUndefined();
+      await expect(onLoad).resolves.toBeUndefined();
+      expect(a.state).toBe("running");
+    });
+  });
+
+  it("survives a hundred gestures without building a hundred contexts", async () => {
+    // `armGesture` fires this on every key while the mixer is not running, and a
+    // refused attempt must stay cheap.
+    await withFakeAudio(async (made) => {
+      const a = createPrimeAudio();
+      const first = a.start();
+      first.catch(() => {});
+      for (let i = 0; i < 100; i++) a.start().catch(() => {});
+      await first.catch(() => {});
+      expect(made.length).toBe(1);
+      expect(a.state).toBe("suspended");
+    });
+  });
+
+  it("always says WHY there is no sound, so a page never has to guess", async () => {
+    await withFakeAudio(async (made) => {
+      const a = createPrimeAudio();
+      // Before any attempt, and after a refusal, and it is a sentence.
+      expect(a.reason).not.toBeNull();
+      expect((a.reason ?? "").length).toBeGreaterThan(10);
+      await expect(a.start()).rejects.toThrow();
+      expect(a.reason).toMatch(/click|press/i);
+      const ctx = made[0] as FakeContext;
+      ctx.allow = true;
+      await a.start();
+      // Running is the one state with nothing to explain.
+      expect(a.reason).toBeNull();
+      a.stop();
+      expect(a.reason).not.toBeNull();
+    });
+  });
+
+  it("plays into the graph once it is running, and not before", async () => {
+    await withFakeAudio(async (made) => {
+      const a = createPrimeAudio();
+      await expect(a.start()).rejects.toThrow();
+      const ctx = made[0] as FakeContext;
+      const mounted = ctx.destinationConnects;
+      // Suspended: deliberately no queue. A cue held over would arrive attached
+      // to an event several seconds in the past, which is worse than silence.
+      a.play(SFX.RED);
+      expect(ctx.started).toBe(0);
+
+      ctx.allow = true;
+      await a.start();
+      a.play(SFX.RED);
+      expect(ctx.started).toBeGreaterThan(0);
+      // The voice reached the master chain, which reached the destination.
+      expect(ctx.destinationConnects).toBe(mounted);
+      expect(a.running).toBe(true);
+    });
+  });
+
+  it("reports no audio device where the constructor is missing", async () => {
+    const a = createPrimeAudio();
+    await expect(a.start()).rejects.toThrow(/AudioContext/);
+    expect(a.state).toBe("stopped");
+    expect(a.reason).toMatch(/Web Audio/i);
+  });
+});

@@ -224,7 +224,7 @@ doc     = "Ball speed multiplier while the `slow` drop is running."
 
 
 # ============================================================================
-# The beam -- the safety net under the paddle, and ONLY for a red ball
+# The beam -- the ONE thing that clears a red ball, and it clears nothing else
 # ============================================================================
 
 [knobs.beam_y]

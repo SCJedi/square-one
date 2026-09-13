@@ -24,9 +24,11 @@ import { describe, expect, it } from "vitest";
 import { BANK_INFO, SFX, SFX_COUNT, createRecordingSnd } from "../src/audio";
 import type { RecordingSnd } from "../src/audio";
 import { createDraw } from "../src/draw";
+import { MUSIC_COUNT } from "../src/music";
 import { ChainHasher } from "../src/hash";
 import { ARENA_HEADER, CART_BYTES, createMachine, emptyInput } from "../src/sim";
-import type { InputFrame, Machine } from "../src/sim";
+import type { InputFrame, Machine, Ui } from "../src/sim";
+import { BTN, KEYMAP, keyboardUi } from "../src/player";
 import {
   ADDR,
   BALL_SIZE,
@@ -428,35 +430,11 @@ describe("the red ball", () => {
     expect(g(r.mem, G.PAD_X)).toBeLessThan(parked);
   });
 
-  it("RULE 4: a RED ball on a WALL bounces and returns to normal", () => {
-    const r = rig();
-    gotoLevel(r, 1);
-    isolateField(r.mem);
-    clearBalls(r.mem);
-
-    placeBall(r.mem, 0.5, 60, -2, 0, ALIVE | RED);
-    expect(isRed(r.mem)).toBe(true);
-    r.step();
-
-    expect(f64(r.mem, ball(0) + ADDR.B_VX)).toBeGreaterThan(0);
-    expect(isRed(r.mem)).toBe(false);
-    expect(ballFlagWord(r.mem) & ALIVE).toBe(ALIVE);
-  });
-
-  it("RULE 4: a RED ball on the CEILING bounces and returns to normal", () => {
-    const r = rig();
-    gotoLevel(r, 1);
-    isolateField(r.mem);
-    clearBalls(r.mem);
-
-    placeBall(r.mem, 60, 9, 0, -2, ALIVE | RED);
-    r.step();
-
-    expect(f64(r.mem, ball(0) + ADDR.B_VY)).toBeGreaterThan(0);
-    expect(isRed(r.mem)).toBe(false);
-  });
-
-  it("RULE 4: a RED ball on a BLOCK bounces and returns to normal", () => {
+  // =======================================================================
+  // RULE 4: THE WRECKING BALL. A red ball is not dangerous for one contact any
+  // more -- it is CLEARING THE LEVEL, and the player wants it alive.
+  // =======================================================================
+  it("RULE 4: a RED ball PLOUGHS a block -- it breaks, and the ball does not turn", () => {
     const r = rig();
     gotoLevel(r, 1);
     const keep = cell(3, 6);
@@ -468,11 +446,95 @@ describe("the red ball", () => {
     placeBall(r.mem, bx, by, 0, -2, ALIVE | RED);
     r.step();
 
-    expect(f64(r.mem, ball(0) + ADDR.B_VY)).toBeGreaterThan(0);
-    expect(isRed(r.mem)).toBe(false);
+    expect(f64(r.mem, block(keep) + ADDR.K_TYPE) | 0, "the block is gone").toBe(0);
+    expect(f64(r.mem, ball(0) + ADDR.B_VY), "and the ball never turned").toBe(-2);
+    expect(isRed(r.mem), "and it is still RED").toBe(true);
   });
 
-  it("RULE 4: the BEAM deflects a RED ball and returns it to normal", () => {
+  it("RULE 4: a three-hit block goes in ONE pass, whatever it had left", () => {
+    // The hits are the block's defence against a NORMAL ball. A red ball does
+    // not spend them one at a time; it takes the block.
+    const r = rig();
+    gotoLevel(r, 3); // MECH_TOUGH, so a type-3 block really does take three
+    const keep = cell(3, 6);
+    onlyBlock(r.mem, keep);
+    put(r.mem, block(keep) + ADDR.K_TYPE, 3);
+    put(r.mem, block(keep) + ADDR.K_HITS, 3);
+    clearBalls(r.mem);
+
+    const bx = (keep % GRID_W) * BLOCK_W + 2;
+    const by = FIELD_TOP + Math.floor(keep / GRID_W) * BLOCK_H + BLOCK_H + 1;
+    placeBall(r.mem, bx, by, 0, -2, ALIVE | RED);
+    r.step();
+
+    expect(f64(r.mem, block(keep) + ADDR.K_TYPE) | 0, "all three hits at once").toBe(0);
+    expect(f64(r.mem, ball(0) + ADDR.B_VY), "and it kept going").toBe(-2);
+    expect(isRed(r.mem)).toBe(true);
+  });
+
+  it("RULE 4: it stays RED through a whole column of blocks", () => {
+    const r = rig();
+    gotoLevel(r, 1);
+    clearBlocks(r.mem);
+    keepSentinel(r.mem);
+    const col = 6;
+    for (let row = 2; row <= 6; row++) {
+      put(r.mem, block(cell(row, col)) + ADDR.K_TYPE, 1);
+      put(r.mem, block(cell(row, col)) + ADDR.K_HITS, 1);
+    }
+    clearBalls(r.mem);
+    placeBall(r.mem, col * BLOCK_W + 2, FIELD_TOP + 7 * BLOCK_H + 1, 0, -2, ALIVE | RED);
+    r.run(30);
+
+    for (let row = 2; row <= 6; row++) {
+      const t = f64(r.mem, block(cell(row, col)) + ADDR.K_TYPE) | 0;
+      expect(t, `row ${row} was ploughed`).toBe(0);
+    }
+    expect(isRed(r.mem), "and it came out the far side still RED").toBe(true);
+  });
+
+  it("RULE 5: a WALL and the CEILING bounce it, and it STAYS RED", () => {
+    const r = rig();
+    gotoLevel(r, 1);
+    isolateField(r.mem);
+    clearBalls(r.mem);
+
+    placeBall(r.mem, 0.5, 60, -2, 0, ALIVE | RED);
+    r.step();
+    expect(f64(r.mem, ball(0) + ADDR.B_VX)).toBeGreaterThan(0);
+    expect(isRed(r.mem), "still RED after a wall").toBe(true);
+    expect(ballFlagWord(r.mem) & ALIVE).toBe(ALIVE);
+
+    placeBall(r.mem, 60, 9, 0, -2, ALIVE | RED);
+    r.step();
+    expect(f64(r.mem, ball(0) + ADDR.B_VY)).toBeGreaterThan(0);
+    expect(isRed(r.mem), "still RED after the ceiling").toBe(true);
+  });
+
+  it("RULE 6: a SOLID and a SHIELDED block bounce it, and it STAYS RED", () => {
+    // This is what keeps level eight's shielded wall standing. A red ball that
+    // ate those two would clear the one level built to REQUIRE the gun.
+    for (const t of [5, 6]) {
+      const r = rig();
+      gotoLevel(r, 7); // MECH_SHIELD, so a type-6 block is really shielded
+      const keep = cell(3, 6);
+      onlyBlock(r.mem, keep);
+      put(r.mem, block(keep) + ADDR.K_TYPE, t);
+      put(r.mem, block(keep) + ADDR.K_HITS, 1);
+      clearBalls(r.mem);
+
+      const bx = (keep % GRID_W) * BLOCK_W + 2;
+      const by = FIELD_TOP + Math.floor(keep / GRID_W) * BLOCK_H + BLOCK_H + 1;
+      placeBall(r.mem, bx, by, 0, -2, ALIVE | RED);
+      r.step();
+
+      expect(f64(r.mem, block(keep) + ADDR.K_TYPE) | 0, `type ${t} still stands`).toBe(t);
+      expect(f64(r.mem, ball(0) + ADDR.B_VY), "the ball came back down").toBeGreaterThan(0);
+      expect(isRed(r.mem), `still RED off a type-${t} block`).toBe(true);
+    }
+  });
+
+  it("RULE 7: the BEAM deflects a RED ball and returns it to normal", () => {
     const r = rig();
     gotoLevel(r, 1);
     isolateField(r.mem);
@@ -491,7 +553,9 @@ describe("the red ball", () => {
     expect(ballFlagWord(r.mem) & ALIVE).toBe(ALIVE);
   });
 
-  it("RULE 4: a SHOT clears a RED ball without deflecting it", () => {
+  it("a SHOT does nothing to a RED ball", () => {
+    // A shot used to be the skilled way out of the panic window. Rule 7 made
+    // the beam the only clear, so the gun is a gun and the shot goes past.
     const r = rig();
     gotoLevel(r, 1);
     isolateField(r.mem);
@@ -505,85 +569,65 @@ describe("the red ball", () => {
 
     r.step();
 
-    expect(isRed(r.mem)).toBe(false);
-    expect(ballFlagWord(r.mem) & ALIVE).toBe(ALIVE);
-    // A shot deflects nothing: the ball's velocity is untouched.
-    expect(f64(r.mem, ball(0) + ADDR.B_VX)).toBe(0);
+    expect(isRed(r.mem), "still RED").toBe(true);
+    expect(f64(r.mem, ball(0) + ADDR.B_VX), "and undeflected").toBe(0);
     expect(f64(r.mem, ball(0) + ADDR.B_VY)).toBe(0);
-    expect(f64(r.mem, s + ADDR.S_LIVE)).toBe(0);
+    expect(f64(r.mem, s + ADDR.S_LIVE), "the shot flew straight through").toBe(1);
   });
 
-  // =======================================================================
-  // THE TEST THAT STOPS THE BEAM BECOMING A FLOOR
-  // =======================================================================
-  it("THE BEAM IS NOT A FLOOR: a normal ball falls straight through it", () => {
+  it("THE BEAM IS THE ONLY CLEAR: every other contact leaves it RED", () => {
+    // Rule 7 written as one run of assertions, because it is the rule the rest
+    // of the cart has to keep out of the way of.
     const r = rig();
     gotoLevel(r, 1);
-    isolateField(r.mem);
-    clearBalls(r.mem);
-    setG(r.mem, G.PAD_X, 0); // the paddle is nowhere near it
-
-    placeBall(r.mem, 60, BEAM_Y - 8, 0, 2, ALIVE); // NOT red
-    const livesBefore = g(r.mem, G.LIVES) | 0;
-
-    let crossedTheBeam = false;
-    let lost = false;
-    for (let i = 0; i < 20; i++) {
-      r.step();
-      // A life going is how the loss shows: `loseLife` immediately serves a
-      // fresh ball into the same slot, so "is slot 0 alive" would be answered
-      // by the REPLACEMENT rather than by the ball under test.
-      if ((g(r.mem, G.LIVES) | 0) < livesBefore) {
-        lost = true;
-        break;
-      }
-      // While it lives it must still be falling. One upward velocity here and
-      // the beam has become a floor.
-      expect(f64(r.mem, ball(0) + ADDR.B_VY)).toBeGreaterThan(0);
-      if (f64(r.mem, ball(0) + ADDR.B_Y) > BEAM_Y + 2) crossedTheBeam = true;
-    }
-
-    expect(crossedTheBeam).toBe(true);
-    expect(lost).toBe(true);
-    expect(g(r.mem, G.LIVES) | 0).toBe(livesBefore - 1);
-  });
-
-  it("the beam exists only while a ball is RED", () => {
-    const r = rig();
-    gotoLevel(r, 1);
-    isolateField(r.mem);
-    clearBalls(r.mem);
     setG(r.mem, G.PAD_X, 0);
 
-    // Red: deflected, and no longer red afterwards.
+    const keep = cell(3, 6);
+    const bx = (keep % GRID_W) * BLOCK_W + 2;
+    const by = FIELD_TOP + Math.floor(keep / GRID_W) * BLOCK_H + BLOCK_H + 1;
+
+    onlyBlock(r.mem, keep);
+    clearBalls(r.mem);
+    placeBall(r.mem, bx, by, 0, -2, ALIVE | RED);
+    r.step();
+    expect(isRed(r.mem), "after ploughing a block").toBe(true);
+
+    placeBall(r.mem, 0.5, 60, -2, 0, ALIVE | RED);
+    r.step();
+    expect(isRed(r.mem), "after a wall").toBe(true);
+
+    placeBall(r.mem, 60, 9, 0, -2, ALIVE | RED);
+    r.step();
+    expect(isRed(r.mem), "after the ceiling").toBe(true);
+
+    put(r.mem, block(keep) + ADDR.K_TYPE, 5);
+    put(r.mem, block(keep) + ADDR.K_HITS, 1);
+    placeBall(r.mem, bx, by, 0, -2, ALIVE | RED);
+    r.step();
+    expect(isRed(r.mem), "after a solid block").toBe(true);
+
     placeBall(r.mem, 60, BEAM_Y - 2, 0, 2, ALIVE | RED);
     r.step();
-    expect(f64(r.mem, ball(0) + ADDR.B_VY)).toBeLessThan(0);
-    expect(isRed(r.mem)).toBe(false);
-
-    // The very same ball, one moment later, is not deflected by anything.
-    placeBall(r.mem, 60, BEAM_Y - 2, 0, 2, ALIVE);
-    r.step();
-    expect(f64(r.mem, ball(0) + ADDR.B_VY)).toBeGreaterThan(0);
+    expect(isRed(r.mem), "and ONLY the beam cleared it").toBe(false);
   });
 
-  it("a RED ball is dangerous for exactly one contact", () => {
+  it("a RED ball stays dangerous until the beam takes it", () => {
     const r = rig();
     gotoLevel(r, 1);
     isolateField(r.mem);
     clearBalls(r.mem);
     setG(r.mem, G.PAD_X, 0);
 
-    // It bounces off a wall, and is then harmless on the paddle.
+    // It bounces off a wall -- and is STILL a paddle-killer afterwards, which
+    // is the whole of what changed about the mechanic.
     placeBall(r.mem, 0.5, PADDLE_Y - BALL_SIZE - 6, -2, 2, ALIVE | RED);
     r.step();
-    expect(isRed(r.mem)).toBe(false);
+    expect(isRed(r.mem)).toBe(true);
 
     const lives = g(r.mem, G.LIVES) | 0;
-    placeBall(r.mem, 8, PADDLE_Y - BALL_SIZE - 1, 0, 2, ALIVE);
+    placeBall(r.mem, 8, PADDLE_Y - BALL_SIZE - 1, 0, 2, ALIVE | RED);
     r.step();
-    expect(g(r.mem, G.LIVES) | 0).toBe(lives);
-    expect(f64(r.mem, ball(0) + ADDR.B_VY)).toBeLessThan(0); // returned, not lost
+    expect(g(r.mem, G.LIVES) | 0, "and the paddle went with it").toBe(lives - 1);
   });
 });
 
@@ -751,6 +795,52 @@ describe("determinism", () => {
     expect(second.length).toBe(first.length);
     // Report the first differing byte rather than "arrays are not equal": a
     // divergence is only actionable if you know where it is.
+    let at = -1;
+    for (let i = 0; i < first.length; i++) {
+      if (first[i] !== second[i]) {
+        at = i;
+        break;
+      }
+    }
+    expect(at).toBe(-1);
+  });
+
+  it("snapshot and restore stay byte-identical with a RED ball mid-plough", () => {
+    // The wrecking ball moves the largest amount of state this cart has: the
+    // block grid, the particle pool, the ring pool, the PRNG that feeds both,
+    // and the ball's own flags -- all of it changing every tick. A snapshot
+    // taken INSIDE the plough is the strongest form of the containment claim.
+    const r = rig(77n);
+    gotoLevel(r, 1);
+    clearBlocks(r.mem);
+    keepSentinel(r.mem);
+    for (let row = 2; row <= 8; row++) {
+      for (let c = 4; c <= 9; c++) {
+        put(r.mem, block(cell(row, c)) + ADDR.K_TYPE, 1);
+        put(r.mem, block(cell(row, c)) + ADDR.K_HITS, 1);
+      }
+    }
+    clearBalls(r.mem);
+    placeBall(r.mem, 6 * BLOCK_W + 2, FIELD_TOP + 9 * BLOCK_H, 0, -2, ALIVE | RED);
+    r.run(4);
+    expect(isRed(r.mem), "a RED ball, inside the wall").toBe(true);
+
+    const snap = r.machine.snapshot();
+    const draw = createDraw();
+    const leg = (): Uint8Array => {
+      for (let t = 0; t < 120; t++) {
+        r.step(script(Number(r.machine.tick)));
+        draw.begin();
+        r.machine.present(draw, 0.5);
+      }
+      return r.machine.snapshot();
+    };
+
+    const first = leg();
+    r.machine.restore(snap);
+    const second = leg();
+
+    expect(second.length).toBe(first.length);
     let at = -1;
     for (let i = 0; i < first.length; i++) {
       if (first[i] !== second[i]) {
@@ -1117,6 +1207,14 @@ describe("sound -- the seventeen events", () => {
     expect(r.snd.calls.length).toBeGreaterThan(10);
     expect(new Set(r.snd.ids).size).toBeGreaterThanOrEqual(4);
     for (const c of r.snd.calls) {
+      // The song is the other thing a cart emits, and it is numbered in its own
+      // table -- `MUSIC`, not `SFX`. Levels 1-3 are one band, so a run this
+      // short makes exactly one of these; `music.test.ts` owns the rest.
+      if (c.kind === "music") {
+        expect(c.id).toBeGreaterThanOrEqual(0);
+        expect(c.id).toBeLessThan(MUSIC_COUNT);
+        continue;
+      }
       expect(c.kind).toBe("play");
       expect(c.id).toBeGreaterThanOrEqual(0);
       expect(c.id).toBeLessThan(SFX_COUNT);
@@ -1128,10 +1226,16 @@ describe("sound -- the seventeen events", () => {
 
 describe("sound is not simulation", () => {
   it("gives `render` no way to make a sound", () => {
-    // Three parameters: sim, draw, alpha. There is no fourth, and that is the
-    // enforcement -- `render` runs on the presentation clock, so a cue fired
+    // Four parameters: sim, draw, alpha, ui. There is no fifth, and NONE of the
+    // four is a mixer -- `render` runs on the presentation clock, so a cue fired
     // from it would play two to four times per event on a fast display.
-    expect(breakoutCart.render.length).toBe(3);
+    //
+    // `ui` is the fourth and it is safe precisely because of the two rules this
+    // block is about: `render` cannot write the arena and cannot make a sound,
+    // so a label that differs between a keyboard and a gamepad cannot reach the
+    // simulation. A device-dependent string in `tick` would be a desync; here it
+    // is a caption.
+    expect(breakoutCart.render.length).toBe(4);
     expect(breakoutCart.tick.length).toBe(3);
     expect(breakoutCart.boot.length).toBe(2);
   });
@@ -1232,5 +1336,138 @@ describe("the level pack", () => {
       expect(ballFlagWord(r.mem) & (ALIVE | STUCK)).toBe(ALIVE | STUCK);
       expect(g(r.mem, G.PAD_W)).toBe(LEVELS[n]!.paddleW);
     }
+  });
+});
+
+// ===========================================================================
+// The prompts, which are the one place a cart is allowed to mention a device
+// ===========================================================================
+
+describe("the prompts name a button and ask the console what it is called", () => {
+  /** A Ui that records what it was asked and answers with an unmistakable sentinel. */
+  function spyUi(tag = "K"): { asked: number[]; ui: Ui } {
+    const asked: number[] = [];
+    return { asked, ui: { label: (b) => (asked.push(b), `<${tag}${b}>`) } };
+  }
+
+  /** Boot the real cart with a given Ui and collect one frame's text. */
+  function frameText(ui: Ui, prepare?: (mem: DataView) => void): string[] {
+    const machine = createMachine(breakoutCart, undefined, ui);
+    machine.boot(4n);
+    const mem = new DataView(machine.arena.buf, ARENA_HEADER, CART_BYTES);
+    prepare?.(mem);
+    const draw = createDraw();
+    draw.begin();
+    machine.present(draw, 0.5);
+    return draw.list.strings.filter((s) => s !== "");
+  }
+
+  it("draws the SERVE prompt out of ui.label, not out of a literal", () => {
+    // THE BUG A PLAYER HIT IN UNDER A MINUTE. The cart drew "PRESS A TO SERVE"
+    // -- the ABI's logical button A -- on a keyboard whose serve is Z and whose
+    // A key moves the paddle LEFT. It named the one key that does the opposite
+    // of what the sentence says.
+    const s = spyUi();
+    const text = frameText(s.ui);
+    expect(text).toContain("PRESS  <K4>  TO SERVE");
+    expect(text).not.toContain("PRESS  A  TO SERVE");
+    // It asked about the SAME bit `tick` reads for the serve.
+    expect(s.asked).toContain(4);
+  });
+
+  it("draws the CONTROLS panel out of ui.label too", () => {
+    const s = spyUi();
+    const text = frameText(s.ui);
+    expect(text).toContain("<K2> <K3>   MOVE");
+    expect(text).toContain("<K4>     SERVE");
+    expect(text).toContain("<K5>     FIRE");
+    // The panel's old guesses, every one of them wrong on some device.
+    expect(text).not.toContain("< >   MOVE");
+    expect(text).not.toContain("Z     SERVE");
+    expect(text).not.toContain("X     FIRE");
+    // PAUSE IS GONE FROM THE CART. It is the console's control -- the ABI keeps
+    // its bit out of the input frame so a cart can neither see nor suppress it
+    // -- so a cart naming its key was naming a control it cannot read.
+    expect(text.some((t) => t.includes("PAUSE"))).toBe(false);
+  });
+
+  it("draws the game-over prompt out of ui.label", () => {
+    const s = spyUi();
+    const text = frameText(s.ui, (mem) => setG(mem, G.STATE, 1));
+    expect(text).toContain("PRESS  <K4>");
+    expect(text).not.toContain("PRESS  A");
+  });
+
+  it("asks about buttons only, and only ones this cart reads", () => {
+    const s = spyUi();
+    frameText(s.ui);
+    // Left, right, serve, fire. Nothing else, and no number that is not a bit.
+    expect([...new Set(s.asked)].sort((a, b) => a - b)).toEqual([2, 3, 4, 5]);
+  });
+
+  it("changes what it draws when the console changes its labels", () => {
+    // The property a literal cannot have. Same cart, same seed, same frame --
+    // a keyboard and a gamepad, and the prompt is right on both.
+    const keyboard = frameText({ label: (b) => (b === 4 ? "Z" : b === 5 ? "X" : "?") });
+    const gamepad = frameText({ label: (b) => (b === 4 ? "(A)" : b === 5 ? "(X)" : "?") });
+    expect(keyboard).toContain("PRESS  Z  TO SERVE");
+    expect(gamepad).toContain("PRESS  (A)  TO SERVE");
+    expect(keyboard).not.toEqual(gamepad);
+  });
+
+  it("says PRESS Z on the shell a player actually gets", () => {
+    // End to end, with the console's real answer rather than a sentinel: this is
+    // the sentence the player reads, and Z is the key that serves.
+    const text = frameText(keyboardUi());
+    expect(text).toContain("PRESS  Z  TO SERVE");
+    expect(text).toContain("← →   MOVE");
+    expect(text).toContain("Z     SERVE");
+    expect(text).toContain("X     FIRE");
+  });
+
+  it("labels only keys that are really bound, so a prompt cannot lie", () => {
+    // The label is DERIVED from KEYMAP. A second table beside it would be a
+    // second place to rebind a key, and the two disagreeing IS this bug.
+    const ui = keyboardUi();
+    const shown: Record<string, string> = {
+      Z: "KeyZ",
+      X: "KeyX",
+      "←": "ArrowLeft",
+      "→": "ArrowRight",
+    };
+    for (const bit of [BTN.A, BTN.B, BTN.LEFT, BTN.RIGHT]) {
+      const code = shown[ui.label(bit)];
+      expect(code).toBeDefined();
+      expect(KEYMAP[code as string]).toBe(bit);
+    }
+    // And the key the old prompt named is NOT the serve. It is LEFT.
+    expect(KEYMAP["KeyA"]).toBe(BTN.LEFT);
+    expect(ui.label(BTN.A)).not.toBe("A");
+  });
+
+  it("falls back to the ABI's own button name when nothing is bound", () => {
+    // A console that cannot answer must still answer something true.
+    const bare = keyboardUi({});
+    expect(bare.label(BTN.A)).toBe("A");
+    expect(bare.label(BTN.LEFT)).toBe("LEFT");
+  });
+
+  it("renders identically to a machine with different labels, in the arena", () => {
+    // Sound is not simulation, and neither is a caption. Two consoles whose
+    // buttons are called different things must produce the same bytes.
+    const run = (ui: Ui): Uint8Array => {
+      const machine = createMachine(breakoutCart, undefined, ui);
+      machine.boot(0x5eedn);
+      const draw = createDraw();
+      const input = emptyInput();
+      for (let t = 0; t < 240; t++) {
+        input.buttons[0] = script(Number(machine.tick));
+        machine.step(input);
+        draw.begin();
+        machine.present(draw, (t % 4) / 4);
+      }
+      return machine.snapshot();
+    };
+    expect(run(keyboardUi())).toEqual(run({ label: (b) => `PAD${b}` }));
   });
 });

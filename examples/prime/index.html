@@ -34,9 +34,17 @@
                        conformance chain can see.
 
       SOUND NEEDS ONE GESTURE. A browser will not start an AudioContext without
-      one, so the console says "press a key for sound" until you give it a key
-      or a click. That is the browser's rule, honestly reported, rather than a
-      page that looks fine and plays nothing.
+      one, so the console says why there is no sound until you give it a key or
+      a click. That is the browser's rule, honestly reported, rather than a page
+      that looks fine and plays nothing.
+
+      AND THE READOUT SAYS WHY. Chrome does not REFUSE a resume() made outside a
+      gesture -- it leaves the promise pending forever -- so a mixer that awaits
+      it hangs at "starting" and every later gesture is answered by the dead
+      promise from before. This page reported "sound: starting" for the whole
+      session while playing nothing. Both halves are fixed: the mixer re-asks on
+      every gesture (packages/prime/src/audio.ts), and every line that can say
+      "no sound" also says the reason.
 
       CONTROLS.  left / right or A / D  move
                  Z or SPACE             serve
@@ -128,7 +136,10 @@
         const cart = {
           boot: (sim, snd) => breakoutCart.boot(sim, snd),
           tick: (sim, input, snd) => breakoutCart.tick(sim, input, snd),
-          render: (sim, draw, alpha) => breakoutCart.render(sim, draw, LERP ? alpha : 0),
+          // `ui` is forwarded untouched. It is how the cart asks this console
+          // what its buttons are called, so a wrapper that dropped it would put
+          // the prompt back to guessing.
+          render: (sim, draw, alpha, ui) => breakoutCart.render(sim, draw, LERP ? alpha : 0, ui),
         };
 
         const player = createPrimePlayer({ mount, cart, seed: 7n, renderer });
@@ -153,19 +164,28 @@
 
         // The honest audio state, polled rather than assumed: the context only
         // becomes "running" when a gesture has let it.
+        //
+        // IT SAYS WHY, NOT JUST WHAT. This readout used to print "sound:
+        // starting" and stop there, and when the mixer got stuck at "starting"
+        // -- which it did, on Chrome, for every player -- the page reported a
+        // state and no reason while making no noise. `audio.reason` is never
+        // null while there is no sound, so there is nothing left for this line
+        // to be silently wrong about.
         const soundEl = document.getElementById("sound");
-        const TEXT = {
-          stopped: "sound: no audio device",
-          starting: "sound: starting",
-          suspended: "sound: press a key",
-          running: "sound: on",
-        };
         setInterval(() => {
           const a = player.audio;
-          const state = a === null ? "stopped" : a.state;
-          const on = state === "running" && !player.muted;
-          soundEl.textContent = player.muted && state === "running" ? "sound: muted" : TEXT[state];
-          soundEl.dataset.on = on ? "1" : "0";
+          if (a === null) {
+            soundEl.textContent = "sound: this browser has no Web Audio";
+            soundEl.dataset.on = "0";
+            return;
+          }
+          const running = a.state === "running";
+          soundEl.textContent = running
+            ? player.muted
+              ? "sound: muted"
+              : "sound: on"
+            : `sound: off -- ${a.reason}`;
+          soundEl.dataset.on = running && !player.muted ? "1" : "0";
         }, 250);
 
         player.start();

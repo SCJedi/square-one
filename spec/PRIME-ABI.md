@@ -15,7 +15,7 @@ export interface PrimeCart {
   /** Exactly once per simulated tick, at a fixed 60 Hz. MAY write the arena. */
   tick(sim: Sim, input: InputFrame, snd: Snd): void;
   /** Zero or more times per tick, on the presentation clock. MUST NOT write the arena. */
-  render(sim: SimRead, draw: Draw, alpha: number): void;
+  render(sim: SimRead, draw: Draw, alpha: number, ui: Ui): void;
 }
 ```
 
@@ -28,8 +28,13 @@ every impact on exactly the hardware that was supposed to make it better.
 That `render` cannot make a sound is the same rule as `render` cannot write the arena, for the
 same reason: everything that happens, happens in `tick`.
 
-```ts
-```
+**`ui` is passed to `render` and never to `tick`, and that is the same rule read backwards.**
+`snd` is kept out of `render` because `render` runs too often; `ui` is kept out of `tick` because
+its answer depends on the device in the player's hands. A label differs between a keyboard, a
+gamepad and a touch surface, and a player may remap it — so it may only be asked for where the
+answer cannot reach the simulation. `render` can neither write the arena nor make a sound, so
+`ui` is **non-normative by construction** rather than by promise: two machines whose buttons are
+called different things produce the same arena, byte for byte.
 
 `alpha` is the fraction between the last two ticks, in `[0, 1)`. It is how a 144 Hz display gets
 smooth motion from a 60 Hz simulation, and it is the reason a cart keeps **both** the previous
@@ -213,6 +218,31 @@ interface Snd {
 
 Same one-way street as everywhere else: the simulation emits, the mixer consumes, nothing flows
 back. A cart cannot read a playback position or an audio clock.
+
+## `ui` — what this console calls its buttons
+
+```ts
+interface Ui {
+  /** What the current input device calls this button. "Z", "A", "(X)". */
+  label(button: number): string;
+}
+```
+
+**A cart MUST NOT name a key.** It names a BUTTON — the bit numbers in `inp` — and the console
+answers with the label the player is looking at. A cart that draws `"PRESS A TO SERVE"` is wrong
+on every keyboard whose serve is not the A key, and on the one this console ships it is worse
+than wrong: `A` moves the paddle LEFT, so the prompt names the key that does the opposite of
+what the sentence says. It is the same line the small console draws when it says touch controls
+are hardware and not cart code.
+
+A runtime MUST pass a `Ui` to every `render`. A runtime that does not know its input device MUST
+answer with the ABI's own button names — `UP`, `DOWN`, `LEFT`, `RIGHT`, `A`, `B`, `X`, `Y`, `L`,
+`R`, `L2`, `R2`, `L3`, `R3`, `SELECT`, `START` — rather than invent a key it has not got.
+`label` MUST return a string for every integer, including one that is not a button.
+
+A runtime that knows its bindings SHOULD derive the label from them rather than keep a second
+table beside them. Two tables are two places to rebind a key, and the two disagreeing is the
+defect this interface exists to prevent.
 
 ## The arena, and the rule that makes rollback affordable
 

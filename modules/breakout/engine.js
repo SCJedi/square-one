@@ -24,20 +24,23 @@
 // The ball is NORMAL or RED (bit 1 of its flags byte).
 //
 //   1. Breaking a type-4 block sets the ball RED.
-//   2. While RED, and only then, a red beam is drawn across the screen BELOW
-//      the paddle.
-//   3. RED ball touches the PADDLE -> paddle destroyed, life lost, ball NORMAL.
-//   4. RED ball touches anything else -- wall, ceiling, block, the beam, a shot
-//      -> it bounces as normal and returns to NORMAL.
+//   2. While RED, and only then, a red beam is drawn BELOW the paddle.
+//   3. RED ball touches the PADDLE -> paddle destroyed, life lost, ball gone.
+//   4. RED ball PASSES THROUGH a BREAKABLE block -- 1, 2, 3, 4, 8 -- destroying
+//      it outright whatever it had left, without deflecting, STAYING RED.
+//   5. Walls and the ceiling bounce it; it STAYS RED.
+//   6. SOLID and SHIELDED bounce it; it STAYS RED. They are structure: a red
+//      ball that ate them would clear level eight, which REQUIRES the gun.
+//   7. RED ball touches the BEAM -> it deflects AND returns to NORMAL. THAT IS
+//      THE ONLY THING THAT CLEARS IT; a shot no longer does.
 //
-// Every one of those "anything else" contacts runs through `bounce()`, which
-// clears bit 1 as its last act; the paddle is the one contact that does not go
-// through `bounce()` at all. That is why rule 3 and rule 4 cannot drift apart:
-// they are not two checks, they are one check and its complement.
+// A WRECKING BALL clearing the level for you: keep it alive, keep it away from
+// the paddle. README.md has the rest of the argument.
 //
-// The player therefore has to do the opposite of what the rest of the game
-// teaches, and GET THE PADDLE OUT OF THE WAY for one contact. The beam is the
-// safety net under it.
+// THE CLEAR IS ONE FUNCTION WITH ONE CALLER: `deflect()` masks bit 1 off a live
+// ball, the beam branch of `contact()` is its only caller, and `bounce()` never
+// touches the bit. A contact added later gets rule 5 free and cannot clear by
+// accident; the test counts the mask; a THIRD STATE would go in `deflect()`.
 //
 // THE BEAM IS NOT A FLOOR. `contact()` tests the beam only when bit 1 is set,
 // so a normal ball falls straight through it and is lost. Softening that would
@@ -397,9 +400,11 @@ function hits(t) {
 /**
  * Take a hit off block `i`. `b` is the ball that did it, or 0 for a shot.
  *
- * SOLID never breaks and SHIELDED breaks only to a shot, which is what makes
- * shooting required rather than optional on the levels that use it. Both still
- * deflect the ball: the bounce happened before this was called.
+ * ANSWERS WHETHER THE BALL MUST BOUNCE: what is left of a block and whether it
+ * stopped you are one decision and may not become two. SOLID never breaks and
+ * SHIELDED breaks only to a shot, which makes shooting required; both deflect
+ * anything, red or not (rule 6). Everything else BREAKS to a RED ball in one
+ * pass and lets it through (rule 4).
  */
 function damage(i, b, shot) {
   var a = G_BLOCKS + i;
@@ -408,17 +413,18 @@ function damage(i, b, shot) {
   // The spark goes where the BALL is, because that is where the contact looked
   // like it happened; the break goes where the BLOCK was.
   if (b) fx(1, r16(b + B_X) >> 4, r16(b + B_Y) >> 4);
-  if (t === 5) return;
+  if (t === 5) return 1;
   if (t === 6 && !shot && mech(KNOB.mechShield)) {
     fx(2, blockX(i), blockY(i));
     snd.sfx(KNOB.sfxPing, 2);
-    return;
+    return 1;
   }
-  var h = (v >> 4) - 1;
+  var red = b && sys.peek(b + B_F) & 2;
+  var h = red ? 0 : (v >> 4) - 1;
   if (h > 0) {
     sys.poke(a, t | (h << 4));
     snd.sfx(KNOB.sfxHit, 1);
-    return;
+    return 1;
   }
   sys.poke(a, 0);
   // A shielded block is the one a ball cannot touch, so its break is not the
@@ -434,6 +440,7 @@ function damage(i, b, shot) {
   }
   fx(0, blockX(i), blockY(i));
   drop(i, t);
+  return !red;
 }
 
 /** Every breakable block gone. Solid blocks are scenery and never count. */
@@ -450,26 +457,25 @@ function cleared() {
 // ============================================================================
 
 /**
- * Reverse one axis and RETURN THE BALL TO NORMAL.
- *
- * Rule 4, in one place. Every contact that is not the paddle comes through
- * here: a wall, the ceiling, a block, the beam. A shot clears the bit directly
- * because a shot does not deflect anything.
+ * Reverse one axis. IT DOES NOT TOUCH THE BALL'S COLOUR and must never grow a
+ * write to the flags byte: rule 5 says a red ball survives every deflection.
  */
 function bounce(b, axis) {
   var a = b + (axis ? B_VY : B_VX);
   w16(a, -r16(a));
-  sys.poke(b + B_F, sys.peek(b + B_F) & 253); // clear bit 1
+}
+
+/** Rule 7: what the BEAM does to a ball. The engine's one clear. */
+function deflect(b) {
+  sys.poke(b + B_F, sys.peek(b + B_F) & 253);
 }
 
 /**
  * A bounce off the edge of the field: the two side walls and the ceiling.
  *
- * The SOUND is why this is not just `bounce`. Every contact in the game comes
- * through `bounce`, and three of them -- a block, the beam, the paddle's own
- * miss -- already have a cue of their own. Putting `sfx_wall` inside `bounce`
- * would play the wall on top of every block hit and every deflection, which is
- * the one thing the bank's three constant effects exist to keep apart.
+ * The SOUND is why this is not just `bounce`. Every deflection comes through
+ * `bounce`, and three -- a block, the beam, the paddle's miss -- have a cue
+ * already; the wall over those is what the bank's effects exist to keep apart.
  */
 function edge(b, axis) {
   bounce(b, axis);
@@ -535,6 +541,7 @@ function contact(b) {
   ) {
     w16(b + B_Y, (KNOB.beamY - BS) * SUB);
     bounce(b, 1);
+    deflect(b); // rule 7, at its one call site
     // Channel 3 is the alarm's channel, so this CUTS THE ALARM OFF where it
     // stands. The player hears the warning stop, which is the whole message.
     snd.sfx(KNOB.sfxDeflect, 3);
@@ -556,7 +563,7 @@ function contact(b) {
  * through the seam between two of them. Each axis moves, tests the cells its
  * new leading edge covers, and on a hit is put back where it was before that
  * axis moved -- never further, so a ball that starts inside a block simply
- * stops rather than being flung across the field.
+ * stops -- or, having PLOUGHED, is not put back at all.
  */
 function sub(b, dx, dy) {
   var x0 = r16(b + B_X);
@@ -569,10 +576,9 @@ function sub(b, dx, dy) {
     edge(b, 0);
   } else {
     var cx = cellAt(x >> 4, r16(b + B_Y) >> 4);
-    if (cx >= 0) {
+    if (cx >= 0 && damage(cx, b, 0)) {
       x = x0;
       bounce(b, 0);
-      damage(cx, b, 0);
     }
   }
   w16(b + B_X, x);
@@ -584,10 +590,9 @@ function sub(b, dx, dy) {
     edge(b, 1);
   } else {
     var cy = cellAt(x >> 4, y >> 4);
-    if (cy >= 0) {
+    if (cy >= 0 && damage(cy, b, 0)) {
       y = y0;
       bounce(b, 1);
-      damage(cy, b, 0);
     }
   }
   w16(b + B_Y, y);
@@ -770,8 +775,8 @@ function fire() {
 }
 
 /**
- * Shots, which do two jobs: they break shielded blocks, and they CLEAR A RED
- * BALL -- the skilled way out of the panic window, once the gun exists.
+ * Shots break blocks, and in particular the shielded ones a ball cannot. One
+ * used to clear a red ball too; rule 7 made the beam the only clear.
  */
 function shots() {
   for (var i = 0; i < MS; i++) {
@@ -784,25 +789,12 @@ function shots() {
       continue;
     }
     sys.poke(s + 1, y);
-    var spent = 0;
-    for (var j = 0; j < MB; j++) {
-      var b = ball(j);
-      var f = sys.peek(b + B_F);
-      if ((f & 3) !== 3) continue;
-      var bx = r16(b + B_X) >> 4;
-      var by = r16(b + B_Y) >> 4;
-      if (x + KNOB.shotW > bx && x < bx + BS && y + KNOB.shotH > by && y < by + BS) {
-        sys.poke(b + B_F, f & 253);
-        spent = 1;
-      }
-    }
     var c = at(x, y);
     if (c < 0) c = at(x + KNOB.shotW - 1, y);
     if (c >= 0) {
       damage(c, 0, 1);
-      spent = 1;
+      sys.poke(s + 2, 0);
     }
-    if (spent) sys.poke(s + 2, 0);
   }
 }
 

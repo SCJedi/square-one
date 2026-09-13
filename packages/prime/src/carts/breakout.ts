@@ -13,21 +13,40 @@
  *
  *   1. Breaking a type-4 block sets the ball RED.
  *   2. While RED, and only then, a red beam exists BELOW the paddle.
- *   3. RED ball touches the PADDLE -> paddle destroyed, life lost, ball NORMAL.
- *   4. RED ball touches anything else -- wall, ceiling, block, the beam, a shot
- *      -> it bounces and returns to NORMAL.
+ *   3. RED ball touches the PADDLE -> paddle destroyed, life lost, ball gone.
+ *   4. RED ball meets a BREAKABLE block -- types 1, 2, 3, 4 and 8 -- and PASSES
+ *      THROUGH it, destroying it outright whatever it had left, WITHOUT
+ *      deflecting. It keeps going and it STAYS RED.
+ *   5. Walls and the ceiling bounce it, and it STAYS RED.
+ *   6. SOLID and SHIELDED blocks bounce it, and it STAYS RED. Those two are the
+ *      level designer's structure rather than his contents: a red ball that ate
+ *      them would clear level eight's shielded wall, which is the one level
+ *      built to REQUIRE the gun.
+ *   7. RED ball touches the BEAM -> it deflects AND returns to NORMAL. THAT IS
+ *      THE ONLY THING THAT CLEARS IT. A shot no longer does.
  *
- * Rules 3 and 4 ARE NOT TWO CHECKS. Every contact that is not the paddle runs
- * through {@link bounce}, which clears the RED bit as its last act; the paddle
- * is the one contact that never calls it. That structure is inherited from the
- * small console deliberately and it is worth more than any amount of
- * restating: two rules written as one check and its complement cannot drift
- * apart, and a future edit that adds a new contact gets rule 4 for free by
- * calling `bounce` like everything else does.
+ * A RED BALL IS A WRECKING BALL, and it is clearing the level for you. The
+ * player wants it alive and wants it nowhere near the paddle, which is the
+ * opposite of the panic the old rule created and the opposite of what the rest
+ * of the game teaches: you steer away from your own ball, and the beam under
+ * the paddle is where you finally catch it.
  *
- * So the player has to do the opposite of what the rest of the game teaches and
- * GET THE PADDLE OUT OF THE WAY for exactly one contact. The beam is the safety
- * net under it, and a shot is the skilled way out once the gun exists.
+ * THE CLEAR IS ONE FUNCTION WITH ONE CALLER. {@link deflect} is the only code
+ * in this file that masks bit 1 off a live ball, and the beam branch of
+ * {@link contact} is its only caller. {@link bounce} -- every wall, every
+ * ceiling, every deflecting block -- does not touch the flags byte at all, so a
+ * contact added later gets rule 5 for free and CANNOT clear a red ball by
+ * accident. That structure is inherited from the small console deliberately,
+ * exactly as the old one was, and it is the same argument in the new shape:
+ * one writer, and everything else structurally unable to be a second.
+ *
+ * A THIRD STATE, if a deflection is ever to leave the ball as something other
+ * than NORMAL, is written in `deflect` and nowhere else. It is the whole of
+ * what the beam does to a ball, so nothing above it has to be restructured.
+ *
+ * And rule 4 is decided by {@link damage}, which ANSWERS WHETHER THE BALL MUST
+ * BOUNCE: what is left of a block and whether it stopped you are one decision,
+ * so they are one return value and cannot become two checks that disagree.
  *
  * THE BEAM IS NOT A FLOOR. {@link contact} tests it only when the RED bit is
  * set, so a normal ball falls straight through and is lost. Softening that
@@ -139,7 +158,8 @@
  */
 
 import { SFX } from "../audio";
-import type { Draw, InputFrame, PrimeCart, Sim, SimRead, Snd } from "../sim";
+import { MUSIC_FADE_FRAMES, bandForLevel } from "../music";
+import type { Draw, InputFrame, PrimeCart, Sim, SimRead, Snd, Ui } from "../sim";
 import {
   CELLS,
   COUNTING_BLOCKS,
@@ -391,6 +411,15 @@ const G = {
   OVER_T: 41,
   /** Ticks since this level loaded, for its entrance. */
   LEVEL_T: 42,
+  /**
+   * The music band playing, PLUS ONE. 0 is a console that has not been told yet.
+   *
+   * WHICH BAND IS PLAYING IS SIMULATION STATE, so it is a slot in the arena like
+   * everything else -- a rewind that restored the game and not the band would be
+   * a determinism hole with a soundtrack. What the band SOUNDS like is the
+   * mixer's business and is not here; see `../music.ts`.
+   */
+  BAND: 43,
 } as const;
 
 /** Slots reserved for globals. Generous; the arena is 1 MB and this is 512 B. */
@@ -786,17 +815,28 @@ function setFlags(m: DataView, b: number, f: number): void {
 }
 
 /**
- * Reverse one axis and RETURN THE BALL TO NORMAL.
+ * Reverse one axis. IT DOES NOT TOUCH THE BALL'S COLOUR.
  *
- * RULE 4, IN ONE PLACE. Every contact that is not the paddle comes through
- * here -- a wall, the ceiling, a block, the beam -- and the paddle is the one
- * contact that never calls it. Clearing the RED bit is the LAST act, so a
- * reader of any caller can see that the bounce happened and the red went with
- * it. A shot clears the bit directly instead, because a shot deflects nothing.
+ * Every deflection in the game comes through here -- a wall, the ceiling, a
+ * solid or shielded block, the beam -- and rule 5 says a red ball survives all
+ * of them. So the one thing this function must never grow is a write to the
+ * flags byte: that is what makes "the beam is the only clear" true by
+ * construction rather than by everybody remembering it.
  */
 function bounce(m: DataView, b: number, axis: number): void {
   const o = b + (axis ? B_VY : B_VX);
   rs(m, o, -rv(m, o));
+}
+
+/**
+ * RULE 7: what a BEAM DEFLECTION does to a ball's state, and THE ONLY PLACE IN
+ * THIS FILE THAT CLEARS THE RED BIT OFF A LIVE BALL.
+ *
+ * Two lines today, and a function of its own on purpose: a third state for the
+ * beam to leave the ball in is written here, and not one caller of `bounce` is
+ * affected, because none of them has an opinion about colour.
+ */
+function deflect(m: DataView, b: number): void {
   setFlags(m, b, flags(m, b) & ~2);
   rs(m, b + B_REDT, 0);
 }
@@ -855,15 +895,29 @@ function resetTrail(m: DataView, b: number): void {
 
 /**
  * Take a hit off block `i`. `b` is the ball that did it, or -1 for a shot.
+ * ANSWERS WHETHER THE BALL MUST BOUNCE OFF IT.
  *
- * SOLID never breaks and SHIELDED breaks only to a shot, which is what makes
- * shooting required rather than optional on the levels that use it. Both still
- * deflect the ball: the bounce happened before this was called.
+ * Two rules, one return value, because they are one decision. SOLID never
+ * breaks and SHIELDED breaks only to a shot -- which is what makes shooting
+ * required rather than optional on the levels that use it -- and both deflect
+ * anything that touches them, red or not: RULE 6. Every other block BREAKS TO A
+ * RED BALL IN ONE PASS, whatever it had left, and lets it through: RULE 4.
+ *
+ * What is left of a block and whether it stopped you cannot be two checks that
+ * disagree if they are one answer, which is the same argument `deflect` makes
+ * about the red bit, one level down.
  */
-function damage(m: DataView, sim: Sim, snd: Snd, i: number, b: number, shot: boolean): void {
+function damage(
+  m: DataView,
+  sim: Sim,
+  snd: Snd,
+  i: number,
+  b: number,
+  shot: boolean,
+): boolean {
   const o = blockOff(i);
   const t = blockType(m, i);
-  if (t === 0) return;
+  if (t === 0) return true;
 
   // The spark goes where the BALL is, because that is where the contact looked
   // like it happened; the break goes where the BLOCK was.
@@ -881,23 +935,27 @@ function damage(m: DataView, sim: Sim, snd: Snd, i: number, b: number, shot: boo
 
   if (t === 5) {
     rs(m, o + K_FLASH, 1);
-    return;
+    return true;
   }
 
   if (t === 6 && !shot && mech(m, MECH_SHIELD)) {
     rs(m, o + K_FLASH, 1);
     ring(m, blockX(m, i) + BLOCK_W * 0.5, blockY(i) + BLOCK_H * 0.5, 10, 0x2be8b0, 3, 7, 0.8);
     snd.play(SFX.PING);
-    return;
+    return true;
   }
 
-  const h = rv(m, o + K_HITS) - 1;
+  // RULE 4, and the whole of it: a RED ball spends every remaining hit at once
+  // and is not deflected. It is tested AFTER the two structural types above, so
+  // rule 6 wins without rule 4 having to know about it.
+  const red = b >= 0 && (flags(m, b) & 2) !== 0;
+  const h = red ? 0 : rv(m, o + K_HITS) - 1;
   if (h > 0) {
     rs(m, o + K_HITS, h);
     rs(m, o + K_FLASH, 1);
     shake(m, 2);
     snd.play(SFX.HIT);
-    return;
+    return true;
   }
 
   const bx = blockX(m, i);
@@ -945,6 +1003,7 @@ function damage(m: DataView, sim: Sim, snd: Snd, i: number, b: number, shot: boo
   }
 
   dropFrom(m, sim, snd, t, bx, by);
+  return !red;
 }
 
 /**
@@ -1012,6 +1071,7 @@ function contact(m: DataView, sim: Sim, snd: Snd, b: number): boolean {
   ) {
     rs(m, b + B_Y, BEAM_Y - BALL_SIZE);
     bounce(m, b, 1);
+    deflect(m, b); // RULE 7, at the cart's one call site
     // The relief beat. It lands as hard as the alarm did, in the same places --
     // and the cue shares the alarm's channel, so IT CUTS THE ALARM OFF WHERE IT
     // STANDS. The player hears the warning stop, which is the whole message.
@@ -1046,6 +1106,12 @@ function contact(m: DataView, sim: Sim, snd: Snd, b: number): boolean {
  * new leading edge covers, and on a hit is put back where it was before that
  * axis moved -- never further, so a ball that starts inside a block simply
  * stops rather than being flung across the field.
+ *
+ * A BLOCK IS THE ONE CONTACT WITH TWO ANSWERS, and `damage` gives it. A ball
+ * that PLOUGHED is not put back and does not bounce, so the position it already
+ * moved to stands and the rest of the frame carries it on into the next block.
+ * Everything else on both axes is unchanged, which is why rule 4 cost the
+ * tunnelling bound nothing: a substep still moves at most `STEP_MAX`.
  */
 function subStep(m: DataView, sim: Sim, snd: Snd, b: number, dx: number, dy: number): boolean {
   const x0 = rv(m, b + B_X);
@@ -1058,10 +1124,9 @@ function subStep(m: DataView, sim: Sim, snd: Snd, b: number, dx: number, dy: num
     edge(m, sim, snd, b, 0);
   } else {
     const c = cellAt(m, x, rv(m, b + B_Y));
-    if (c >= 0) {
+    if (c >= 0 && damage(m, sim, snd, c, b, false)) {
       x = x0;
       bounce(m, b, 0);
-      damage(m, sim, snd, c, b, false);
     }
   }
   rs(m, b + B_X, x);
@@ -1073,10 +1138,9 @@ function subStep(m: DataView, sim: Sim, snd: Snd, b: number, dx: number, dy: num
     edge(m, sim, snd, b, 1);
   } else {
     const c = cellAt(m, x, y);
-    if (c >= 0) {
+    if (c >= 0 && damage(m, sim, snd, c, b, false)) {
       y = y0;
       bounce(m, b, 1);
-      damage(m, sim, snd, c, b, false);
     }
   }
   rs(m, b + B_Y, y);
@@ -1117,7 +1181,7 @@ function stick(m: DataView, sim: Sim, b: number, f: number, pressed: number): vo
   rs(m, b + B_X, gv(m, G.PAD_X) + (gv(m, G.PAD_W) - BALL_SIZE) * 0.5);
   rs(m, b + B_Y, PADDLE_Y - BALL_SIZE);
   gs(m, G.SERVE_T, gv(m, G.SERVE_T) + 1);
-  if (pressed & (1 << 4)) launch(m, sim, b, f);
+  if (pressed & (1 << BTN_A)) launch(m, sim, b, f);
 }
 
 function launch(m: DataView, sim: Sim, b: number, f: number): void {
@@ -1272,8 +1336,8 @@ function balls(m: DataView, sim: Sim, snd: Snd, pressed: number): void {
 // ===========================================================================
 
 function paddle(m: DataView, sim: Sim, snd: Snd, held: number, pressed: number): void {
-  const left = (held >> 2) & 1;
-  const right = (held >> 3) & 1;
+  const left = (held >> BTN_LEFT) & 1;
+  const right = (held >> BTN_RIGHT) & 1;
   const dir = right - left;
 
   // Easing, not teleporting. Top speed is unchanged; see PADDLE_EASE.
@@ -1314,7 +1378,7 @@ function paddle(m: DataView, sim: Sim, snd: Snd, held: number, pressed: number):
     }
     gs(m, G.PAD_TOUCH, t);
   }
-  if (pressed & (1 << 5) && gv(m, G.AMMO) > 0) fire(m, sim, snd);
+  if (pressed & (1 << BTN_B) && gv(m, G.AMMO) > 0) fire(m, sim, snd);
 }
 
 function fire(m: DataView, sim: Sim, snd: Snd): void {
@@ -1339,8 +1403,12 @@ function fire(m: DataView, sim: Sim, snd: Snd): void {
 }
 
 /**
- * Shots, which do two jobs: they break shielded blocks, and they CLEAR A RED
- * BALL -- the skilled way out of the panic window, once the gun exists.
+ * Shots, which do ONE job: they break blocks, and in particular the shielded
+ * blocks a ball cannot.
+ *
+ * A shot used to clear a red ball as well. Rule 7 took that away -- the beam is
+ * the only clear -- so a shot passes straight through a red ball and does
+ * nothing to it, and nothing in this loop looks at a ball at all.
  */
 function shots(m: DataView, sim: Sim, snd: Snd): void {
   for (let i = 0; i < MAX_SHOTS; i++) {
@@ -1356,32 +1424,12 @@ function shots(m: DataView, sim: Sim, snd: Snd): void {
     }
     rs(m, s + S_Y, y);
 
-    let spent = false;
-    for (let j = 0; j < MAX_BALLS; j++) {
-      const b = ballOff(j);
-      const f = flags(m, b);
-      if ((f & 3) !== 3) continue;
-      const bx = rv(m, b + B_X);
-      const by = rv(m, b + B_Y);
-      if (x + SHOT_W > bx && x < bx + BALL_SIZE && y + SHOT_H > by && y < by + BALL_SIZE) {
-        // A shot clears the bit DIRECTLY rather than through `bounce`, because
-        // a shot deflects nothing. Same rule, different mechanism.
-        setFlags(m, b, f & ~2);
-        rs(m, b + B_REDT, 0);
-        ring(m, bx + BALL_SIZE * 0.5, by + BALL_SIZE * 0.5, 18, 0xffd23f, 2, 12, 1.2);
-        burstSpark(m, sim, bx + BALL_SIZE * 0.5, by + BALL_SIZE * 0.5, 0xffe58f, 18, 1.4);
-        shake(m, 9);
-        spent = true;
-      }
-    }
-
     let c = at(m, x, y);
     if (c < 0) c = at(m, x + SHOT_W - EDGE_E, y);
     if (c >= 0) {
       damage(m, sim, snd, c, -1, true);
-      spent = true;
+      rs(m, s + S_LIVE, 0);
     }
-    if (spent) rs(m, s + S_LIVE, 0);
   }
 }
 
@@ -1568,6 +1616,37 @@ function loadLevel(m: DataView): void {
   spawnBall(m);
 }
 
+/**
+ * Play the band this level belongs to, AND ONLY WHEN THE BAND CHANGES.
+ *
+ * Three judgement calls, each of which could defensibly have gone the other way
+ * and each of which `packages/prime/README.md` states with its reason:
+ *
+ *   - **It starts on the first tick**, not in `boot`. The small console starts
+ *     it in `loadLevel`, which `boot` calls last; Prime differs by one sixtieth
+ *     of a second and gains the rule that everything that happens, happens in
+ *     `tick`. The mixer latches the request, so the theme arrives under the
+ *     serve exactly as it does there -- `MUSIC_FADE_FRAMES` of it.
+ *   - **It restarts only when the band changes.** A band is a two-bar loop;
+ *     clipping it at every level would say nothing the HUD's level number has
+ *     not already said, three times over on the way to level 4. That is why
+ *     `G.BAND` exists and why it is in the arena.
+ *   - **It plays through a lost life and through game over.** An effect on a
+ *     music channel takes that voice for its length and gives it back, so the
+ *     loss, the smash and the game over all land on a continuing melody with
+ *     the floor gone from under them. Silencing the song would put a second of
+ *     silence exactly where the cue is.
+ *
+ * Calling it every tick is the mechanism, not waste: this asserts which band
+ * SHOULD be playing and the mixer decides whether anything has to happen.
+ */
+function song(m: DataView, snd: Snd): void {
+  const want = bandForLevel(gv(m, G.LEVEL) | 0) + 1;
+  if ((gv(m, G.BAND) | 0) === want) return;
+  gs(m, G.BAND, want);
+  snd.music(want - 1, MUSIC_FADE_FRAMES);
+}
+
 /** Start a run. Called from `boot`, and again when a finished run is restarted. */
 function resetRun(m: DataView): void {
   wipe(m, 0, ARENA_USED);
@@ -1724,6 +1803,20 @@ function rowDrift(rows: number, r: number, drift: number): number {
 // ===========================================================================
 
 /**
+ * The ABI button bits this cart reads, named.
+ *
+ * `render`'s prompts ask {@link Ui.label} about these same constants, so what
+ * the screen names and what `tick` reads can never drift into being two
+ * different buttons. The NUMBERS are the ABI's and are the same everywhere; what
+ * they are CALLED is the console's and differs per device, which is the whole
+ * reason the prompt has to ask.
+ */
+const BTN_LEFT = 2;
+const BTN_RIGHT = 3;
+const BTN_A = 4;
+const BTN_B = 5;
+
+/**
  * `snd` is accepted and not used.
  *
  * The signature is the ABI's and the parameter is real: a cart that wanted a
@@ -1746,13 +1839,18 @@ function tick(sim: Sim, input: InputFrame, snd: Snd): void {
   // nothing.
   savePrev(m);
 
+  // The difficulty curve, in the music. See `song`: this asserts the band every
+  // tick and fires only when it changes, which is why a level that does not
+  // change the band never clips the loop.
+  song(m, snd);
+
   const state = gv(m, G.STATE) | 0;
   if (state) {
     gs(m, G.OVER_T, gv(m, G.OVER_T) + 1);
     // A finished run still animates: the debris of the paddle that ended it is
     // on screen and it has somewhere to fall.
     stepVisuals(m);
-    if (pressed & (1 << 4)) {
+    if (pressed & (1 << BTN_A)) {
       resetRun(m);
       // `resetRun` zeroes the arena, which includes last frame's buttons. Put
       // them back, or the A that restarted the run is seen as a fresh press
@@ -1890,7 +1988,21 @@ function pip(draw: Draw, x: number, y: number, w: number, h: number, colour: num
   draw.roundRect(x, y, w, h, h * 0.5, colour);
 }
 
-function render(sim: SimRead, draw: Draw, alpha: number): void {
+/**
+ * Every on-screen prompt names a BUTTON and asks the console what it is called.
+ *
+ * THE CART MUST NEVER TYPE A KEY NAME. It shipped once drawing "PRESS A TO
+ * SERVE" -- the ABI's logical button A -- on a keyboard whose serve is Z and
+ * whose A key moves the paddle LEFT, so the prompt told the player to press the
+ * one key that does the opposite of what the sentence says. The same panel drew
+ * `< >` for a d-pad that is on the arrows. A cart cannot know a binding: it
+ * differs between keyboard, gamepad and touch, and a player may remap it.
+ *
+ * `ui.label` is safe to read here and only here, because `render` cannot write
+ * the arena and cannot make a sound -- so a string that differs between devices
+ * cannot reach the simulation. See {@link Ui}.
+ */
+function render(sim: SimRead, draw: Draw, alpha: number, ui: Ui): void {
   const m = sim.mem;
   const tickN = Number(sim.tick & 0xffffffn);
 
@@ -2282,7 +2394,7 @@ function render(sim: SimRead, draw: Draw, alpha: number): void {
     if ((flags(m, ballOff(i)) & 5) === 5) stuck = true;
   }
   if (stuck && state === 0 && dead <= 0) {
-    const s = "PRESS  A  TO SERVE";
+    const s = `PRESS  ${ui.label(BTN_A)}  TO SERVE`;
     const w = draw.measure(s, 30);
     const a = 0.45 + 0.35 * (pulse + 1) * 0.5;
     draw.text(s, sx(FIELD * 0.5) - w * 0.5, sy(PADDLE_Y) - 40, 30, col(INK_RGB, a));
@@ -2304,7 +2416,7 @@ function render(sim: SimRead, draw: Draw, alpha: number): void {
     const cx = sx(FIELD * 0.5);
     draw.text(title, cx - draw.measure(title, 92) * 0.5, top + 140, 92, col(rgb, ent));
     draw.text(line, cx - draw.measure(line, 30) * 0.5, top + 196, 30, col(INK_RGB, ent * 0.85));
-    const p = "PRESS  A";
+    const p = `PRESS  ${ui.label(BTN_A)}`;
     draw.text(p, cx - draw.measure(p, 34) * 0.5, top + 266, 34,
       col(INK_RGB, ent * (0.5 + 0.4 * (pulse + 1) * 0.5)));
   }
@@ -2383,11 +2495,20 @@ function render(sim: SimRead, draw: Draw, alpha: number): void {
     draw.text("NO RED BLOCKS ON THIS LEVEL", RX, 436, 20, col(DIM_RGB, 1));
   }
 
+  // Every line asks. The panel used to state `< >`, `Z` and `X` as facts, which
+  // were three guesses about a device this cart cannot see -- and `< >` is what
+  // a player reads as the comma and full-stop keys rather than as a d-pad.
+  //
+  // PAUSE IS NOT LISTED, and its absence is the same rule from the other side:
+  // pause belongs to the console, the ABI keeps its bit out of the input frame
+  // precisely so a cart can neither observe nor suppress it, and a cart that
+  // cannot read a control has no business naming its key either. The console
+  // puts a real pause button on the glass.
+  const keys = `${ui.label(BTN_LEFT)} ${ui.label(BTN_RIGHT)}`;
   draw.text("CONTROLS", RX, 560, 22, col(DIM_RGB, 1));
-  draw.text("< >   MOVE", RX, 598, 24, col(INK_RGB, 0.9));
-  draw.text("Z     SERVE", RX, 630, 24, col(INK_RGB, 0.9));
-  draw.text("X     FIRE", RX, 662, 24, col(INK_RGB, 0.9));
-  draw.text("ESC   PAUSE", RX, 694, 24, col(INK_RGB, 0.9));
+  draw.text(`${keys}   MOVE`, RX, 598, 24, col(INK_RGB, 0.9));
+  draw.text(`${ui.label(BTN_A)}     SERVE`, RX, 630, 24, col(INK_RGB, 0.9));
+  draw.text(`${ui.label(BTN_B)}     FIRE`, RX, 662, 24, col(INK_RGB, 0.9));
 
   const tk = `TICK ${sim.tick}`;
   draw.text(tk, 1920 - 46 - draw.measure(tk, 20), 1040, 20, col(DIM_RGB, 1));

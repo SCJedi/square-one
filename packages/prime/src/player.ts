@@ -95,11 +95,28 @@
  * The cart is handed `snd` by the machine, on `boot` and on every `tick`, and
  * never on `render`. This file's contribution is to own the backend: it builds
  * the real mixer when the environment has WebAudio, hands it to the machine, and
- * ARMS THE FIRST USER GESTURE TO START IT. A browser refuses to run an
+ * ARMS EVERY USER GESTURE TO START IT. A browser refuses to run an
  * `AudioContext` outside a gesture and refuses quietly, so `start()` is
- * attempted immediately, expected to fail, and retried from the first key or
- * pointer the player produces -- and until it succeeds the status line says so
- * rather than pretending.
+ * attempted immediately, expected to fail, and retried from every key and
+ * pointer the player produces until one is allowed through.
+ *
+ * EVERY gesture, not the first one, and the arm is re-checked on every presented
+ * frame rather than set up once. A mixer that is not running is a thing that can
+ * become true again after it was false -- a tab switch, an audio device
+ * disappearing -- and a console that armed the gesture once has no way back. The
+ * same frame refreshes the status line, so the sentence on the glass is a
+ * reading of the mixer rather than a memory of it.
+ *
+ * =========================================================================
+ * WHAT THE CONSOLE CALLS ITS BUTTONS
+ * =========================================================================
+ * A cart draws "PRESS <X> TO SERVE" and must not know what <X> is: bindings
+ * differ between a keyboard, a gamepad and a touch surface, and a player may
+ * remap them. So the shell hands the machine a {@link Ui}, `render` hands it to
+ * the cart, and the cart asks. This shell's answer is DERIVED FROM `KEYMAP` --
+ * see {@link keyboardUi} -- so the prompt cannot name a key that does something
+ * else, which is exactly what it did when the keyboard's serve was Z and the
+ * prompt said A, the key that moves LEFT.
  */
 
 import { createPrimeAudio, audioAvailable } from "./audio";
@@ -108,11 +125,11 @@ import { createDraw } from "./draw";
 import type { DrawList } from "./draw";
 import { createRenderer } from "./render";
 import type { Renderer } from "./render";
-import { MAX_PLAYERS, createMachine, nullSnd } from "./sim";
-import type { InputFrame, Machine, PrimeCart, Sim, SimRead, Snd } from "./sim";
+import { MAX_PLAYERS, createMachine, defaultUi, nullSnd } from "./sim";
+import type { InputFrame, Machine, PrimeCart, Sim, SimRead, Snd, Ui } from "./sim";
 
 export { MAX_PLAYERS };
-export type { InputFrame, Machine, PrimeCart, Sim, SimRead, Snd };
+export type { InputFrame, Machine, PrimeCart, Sim, SimRead, Snd, Ui };
 
 /** Analog axes per player: two sticks. */
 export const AXES_PER_PLAYER = 4;
@@ -166,13 +183,22 @@ export interface PrimePlayerOptions {
    */
   snd?: Snd;
   /**
+   * What the cart is told this console calls its buttons.
+   *
+   * Omitted, the shell installs {@link keyboardUi}, derived from `KEYMAP`. Pass
+   * one here for a device this shell does not read -- a gamepad's own labels, or
+   * a recording `Ui` in a test that wants to prove a prompt asked rather than
+   * guessed.
+   */
+  ui?: Ui;
+  /**
    * Build the machine. Defaults to the real `createMachine` from `sim.ts`.
    *
    * The hook exists for a host that wants its own instrumentation around the
    * core, not for a substitute for it: whatever comes back must be a `Machine`,
    * which means a real arena, a real PCG64-DXSM and a real seal around `render`.
    */
-  machine?: (cart: PrimeCart, snd: Snd) => Machine;
+  machine?: (cart: PrimeCart, snd: Snd, ui: Ui) => Machine;
   /** Draw with this renderer instead of a fresh one. For tests and for a GPU backend. */
   renderer?: Renderer;
   /** The document to build in. Defaults to `mount.ownerDocument`. */
@@ -191,6 +217,8 @@ export interface PrimePlayer {
   readonly machine: Machine;
   /** The mixer the cart is emitting through. */
   readonly snd: Snd;
+  /** What the cart is told this console's buttons are called. */
+  readonly ui: Ui;
   /**
    * The WebAudio backend, when this shell built one.
    *
@@ -243,6 +271,92 @@ export const KEYMAP: Readonly<Record<string, number>> = Object.freeze({
   Backquote: BTN.SELECT,
   Enter: BTN.START,
 });
+
+// ---------------------------------------------------------------------------
+// What this console calls its buttons
+// ---------------------------------------------------------------------------
+
+/**
+ * What a key is CALLED on screen, where its `code` is not the name of it.
+ *
+ * Arrows get the arrow glyphs. The panel used to draw `< >`, which a player
+ * reads as the comma and full-stop keys -- and the whole reason this table
+ * exists is that a prompt naming the wrong key is worse than no prompt.
+ */
+const KEY_LABEL: Readonly<Record<string, string>> = Object.freeze({
+  // Written as escapes rather than as glyphs: this file travels through
+  // toolchains that do not all agree about the encoding of a `.ts`, and an
+  // arrow that arrives as two bytes of mojibake is the bug again.
+  ArrowUp: "\u2191",
+  ArrowDown: "\u2193",
+  ArrowLeft: "\u2190",
+  ArrowRight: "\u2192",
+  Space: "SPACE",
+  Enter: "ENTER",
+  Backquote: "`",
+  ShiftLeft: "SHIFT",
+  ShiftRight: "SHIFT",
+});
+
+/**
+ * Which key a prompt names when SEVERAL are bound to one button.
+ *
+ * Serve is on J, Z and SPACE at once; a prompt has room for one of them. The
+ * order is a claim about hands rather than about the table: a player with the
+ * right hand on the arrows has the left on Z and X, which is also what the
+ * cart's own panel has always named.
+ *
+ * A code not in this list still gets found -- the scan below falls through to
+ * the map itself -- so adding a binding to {@link KEYMAP} never makes a label
+ * disappear, it only makes the preferred one worth stating here.
+ */
+const HINT_ORDER: readonly string[] = Object.freeze([
+  "ArrowLeft",
+  "ArrowRight",
+  "ArrowUp",
+  "ArrowDown",
+  "KeyZ",
+  "KeyX",
+  "Space",
+  "Enter",
+]);
+
+/** `KeyZ` -> `Z`, `Digit1` -> `1`, and the table above for everything else. */
+function keyLabel(code: string): string {
+  const named = KEY_LABEL[code];
+  if (named !== undefined) return named;
+  if (code.startsWith("Key")) return code.slice(3);
+  if (code.startsWith("Digit")) return code.slice(5);
+  return code.toUpperCase();
+}
+
+/**
+ * The keyboard's answer to "what do you call this button".
+ *
+ * DERIVED FROM {@link KEYMAP}, never written out beside it. A second table
+ * listing the labels would be a second place to rebind a key, and the failure
+ * mode of the two disagreeing is exactly the bug this exists to fix: a prompt
+ * naming a key that does something else. Rebind `KEYMAP` and the prompt follows.
+ *
+ * A button with no key bound falls back to the ABI's own name for it, which is
+ * true on every device -- and a console with a gamepad would install its own
+ * `Ui` here, answering "A" where this one answers "Z". The cart does not change.
+ */
+export function keyboardUi(keymap: Readonly<Record<string, number>> = KEYMAP): Ui {
+  const fallback = defaultUi();
+  return Object.freeze({
+    label(button: number): string {
+      const b = button | 0;
+      for (const code of HINT_ORDER) {
+        if (keymap[code] === b) return keyLabel(code);
+      }
+      for (const code of Object.keys(keymap)) {
+        if (keymap[code] === b) return keyLabel(code);
+      }
+      return fallback.label(b);
+    },
+  });
+}
 
 /** Keys the CONSOLE takes. A cart never sees them -- the ABI says pause is not its business. */
 const CONSOLE_KEYS: Readonly<Record<string, "pause">> = Object.freeze({
@@ -574,7 +688,11 @@ export function createPrimePlayer(opts: PrimePlayerOptions): PrimePlayer {
     opts.snd === undefined && audioAvailable() ? createPrimeAudio() : null;
   const snd: Snd = opts.snd ?? audio ?? nullSnd();
 
-  const machine: Machine = (opts.machine ?? createMachine)(opts.cart, snd);
+  // --- the labels -----------------------------------------------------------
+  // Derived from KEYMAP, so a prompt cannot name a key that does something else.
+  const ui: Ui = opts.ui ?? keyboardUi();
+
+  const machine: Machine = (opts.machine ?? createMachine)(opts.cart, snd, ui);
 
   // --- reduced motion -------------------------------------------------------
   const motion = reducedMotionQuery(win);
@@ -659,6 +777,13 @@ export function createPrimePlayer(opts: PrimePlayerOptions): PrimePlayer {
     draw.begin();
     machine.present(draw, alpha);
     renderer.draw(draw.list);
+    // The sound state is watched rather than remembered. A mixer can lose its
+    // context to a tab switch or an audio-device change long after `start()`
+    // succeeded, and a status line refreshed only at the moments this file
+    // happens to call it is a status line that will one day be confidently
+    // wrong. Both calls below cost nothing when nothing has changed.
+    if (audio !== null && audio.state !== "running" && !audio.muted) armGesture();
+    refreshStatus();
   }
 
   function loop(nowMs: number): void {
@@ -678,18 +803,35 @@ export function createPrimePlayer(opts: PrimePlayerOptions): PrimePlayer {
    * The status line, composed rather than assigned.
    *
    * "paused" is the thing a player who cannot see the screen most needs told, so
-   * it wins; below it sits the autoplay notice, which is the second. Two writers
+   * it wins; below it sits the sound notice, which is the second. Two writers
    * each setting `textContent` directly is how one of them ends up silently
    * erasing the other.
+   *
+   * SILENCE ALWAYS SAYS WHY. The mixer's `reason` is never null while it is not
+   * running, so there is no state in which a player gets no sound and no
+   * sentence -- which is the state this console was in when it shipped: the
+   * mixer stuck at "starting" forever, and a status line that said "press a key"
+   * to somebody who had pressed a dozen.
    */
+  function statusLine(): string {
+    if (paused) return "paused";
+    if (audio === null) return "no sound: this console built no mixer";
+    if (audio.state === "running") return "";
+    // Muted is the player's own decision, so it is not a fault to report -- but
+    // a muted mixer that also never started still has to be able to say so, and
+    // it will the moment the box is unticked.
+    if (audio.muted) return "";
+    return `no sound: ${audio.reason ?? "starting"}`;
+  }
+
+  /** The last text written, so the DOM is touched only when it changes. */
+  let statusShown: string | null = null;
+
   function refreshStatus(): void {
-    if (paused) {
-      status.textContent = "paused";
-      return;
-    }
-    status.textContent = audio !== null && audio.state !== "running" && !audio.muted
-      ? "press a key for sound"
-      : "";
+    const next = statusLine();
+    if (next === statusShown) return;
+    statusShown = next;
+    status.textContent = next;
   }
 
   let gestureArmed = false;
@@ -807,6 +949,7 @@ export function createPrimePlayer(opts: PrimePlayerOptions): PrimePlayer {
 
     machine,
     snd,
+    ui,
     audio,
 
     get muted(): boolean {

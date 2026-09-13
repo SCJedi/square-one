@@ -7,12 +7,13 @@ import {
   CART_BYTES,
   MAX_PLAYERS,
   createMachine,
+  defaultUi,
   devChecksEnabled,
   emptyInput,
   nullSnd,
   setDevChecks,
 } from "../src/sim";
-import type { Draw, InputFrame, PrimeCart, Sim, SimRead, Snd } from "../src/sim";
+import type { Draw, InputFrame, PrimeCart, Sim, SimRead, Snd, Ui } from "../src/sim";
 
 /** A Draw that records nothing. `render` is non-normative; the calls do not matter. */
 const NO_DRAW: Draw = {
@@ -417,20 +418,33 @@ describe("snd -- who gets it, and what it may not touch", () => {
     // The rule that this whole parameter exists to express. `render` runs on the
     // presentation clock, two to four times per tick on a fast display, so a
     // sound emitted there fires two to four times per event -- on exactly the
-    // hardware that was supposed to make the game sound better. There is no
-    // fourth parameter, and this is the assertion that keeps it that way.
+    // hardware that was supposed to make the game sound better.
+    //
+    // `render` HAS a fourth argument, and it is `ui` -- the console's labels for
+    // its buttons. So the assertion is not "there are three arguments" any more;
+    // it is the stronger and more honest one: WHATEVER render is handed, none of
+    // it can make a sound. Every argument is checked for a `play`.
     const s = spy();
     let args = -1;
-    let fourth: unknown = "never ran";
+    let fifth: unknown = "never ran";
+    let anythingSoundLike = false;
     const m = createMachine(
       cartOf({
-        render(sim, draw, alpha) {
+        render(sim, draw, alpha, ui) {
           args = arguments.length;
           // eslint-disable-next-line prefer-rest-params
-          fourth = arguments[3];
+          fifth = arguments[4];
+          for (let i = 0; i < arguments.length; i++) {
+            // eslint-disable-next-line prefer-rest-params
+            const a = arguments[i] as Record<string, unknown> | null;
+            if (a !== null && typeof a === "object" && typeof a["play"] === "function") {
+              anythingSoundLike = true;
+            }
+          }
           void sim.tick;
           void draw;
           void alpha;
+          void ui.label(4);
         },
       }),
       s.snd,
@@ -438,8 +452,9 @@ describe("snd -- who gets it, and what it may not touch", () => {
     m.boot(1n);
     m.step(emptyInput());
     for (let i = 0; i < 8; i++) m.present(NO_DRAW, i / 8);
-    expect(args).toBe(3);
-    expect(fourth).toBeUndefined();
+    expect(args).toBe(4);
+    expect(fifth).toBeUndefined();
+    expect(anythingSoundLike).toBe(false);
     expect(s.calls).toEqual([]);
   });
 
@@ -683,6 +698,162 @@ describe("determinism end to end", () => {
       a.step(emptyInput());
       b.step(emptyInput());
       for (let k = 0; k < (i % 5) + 1; k++) b.present(NO_DRAW, k / 8);
+    }
+    expect(a.snapshot()).toEqual(b.snapshot());
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+describe("ui -- what the console calls its buttons", () => {
+  /** A Ui that records what it was asked, and answers with the button number. */
+  function spyUi(): { asked: number[]; ui: Ui } {
+    const asked: number[] = [];
+    return {
+      asked,
+      ui: {
+        label(button: number): string {
+          asked.push(button);
+          return `<${button}>`;
+        },
+      },
+    };
+  }
+
+  it("names every button the ABI has, by default", () => {
+    const ui = defaultUi();
+    // The names in `spec/PRIME-ABI.md`, in bit order. Not key names: a machine
+    // that does not know its input device must not invent one.
+    expect(ui.label(BUTTON.A)).toBe("A");
+    expect(ui.label(BUTTON.LEFT)).toBe("LEFT");
+    expect(ui.label(BUTTON.RIGHT)).toBe("RIGHT");
+    expect(ui.label(BUTTON.START)).toBe("START");
+    // And it answers SOMETHING for a button that does not exist, rather than
+    // handing `undefined` to `draw.text`.
+    expect(typeof ui.label(99)).toBe("string");
+    expect(ui.label(99).length).toBeGreaterThan(0);
+  });
+
+  it("reaches render and NOTHING ELSE", () => {
+    // The mirror image of `snd`. A label depends on the device in the player's
+    // hands, so it may only be asked for where the answer cannot reach the
+    // simulation -- and `render` is the only entry point that qualifies.
+    const s = spyUi();
+    let sawInBoot: unknown = "never ran";
+    let sawInTick: unknown = "never ran";
+    let drawn = "";
+    const m = createMachine(
+      cartOf({
+        boot(): void {
+          // eslint-disable-next-line prefer-rest-params
+          sawInBoot = arguments[2];
+        },
+        tick(): void {
+          // eslint-disable-next-line prefer-rest-params
+          sawInTick = arguments[3];
+        },
+        render: (_sim, _d, _a, ui) => void (drawn = `PRESS ${ui.label(BUTTON.A)} TO SERVE`),
+      }),
+      nullSnd(),
+      s.ui,
+    );
+    m.boot(1n);
+    m.step(emptyInput());
+    m.present(NO_DRAW, 0);
+    expect(sawInBoot).toBeUndefined();
+    expect(sawInTick).toBeUndefined();
+    expect(drawn).toBe("PRESS <4> TO SERVE");
+    expect(s.asked).toEqual([BUTTON.A]);
+  });
+
+  it("is a frozen facade, so a cart cannot remember anything on it", () => {
+    // Same rule as `sim`, `mem` and `snd`: a property hung off a host object
+    // would survive a tick and survive a restore, and no snapshot would hold it.
+    const s = spyUi();
+    let frozen = false;
+    let smuggled: unknown = "never ran";
+    let sameObject = true;
+    let seen: object | null = null;
+    const m = createMachine(
+      cartOf({
+        render(_sim, _d, _a, ui): void {
+          frozen = Object.isFrozen(ui);
+          try {
+            (ui as unknown as Record<string, unknown>)["carry"] = 1;
+          } catch {
+            // Strict mode throws instead of failing silently. Either is a pass.
+          }
+          smuggled = (ui as unknown as Record<string, unknown>)["carry"];
+          if (seen === null) seen = ui;
+          else if (seen !== ui) sameObject = false;
+          // The cart is NOT handed the host's own object, which the host may
+          // have controls of its own on.
+          if (ui === (s.ui as unknown as object)) sameObject = false;
+        },
+      }),
+      nullSnd(),
+      s.ui,
+    );
+    m.boot(1n);
+    for (let i = 0; i < 3; i++) m.present(NO_DRAW, 0);
+    expect(frozen).toBe(true);
+    expect(smuggled).toBeUndefined();
+    expect(sameObject).toBe(true);
+  });
+
+  it("coerces a label that is not a string, rather than passing it through", () => {
+    let got: unknown = "never ran";
+    const m = createMachine(
+      cartOf({ render: (_s, _d, _a, ui) => void (got = ui.label(4)) }),
+      nullSnd(),
+      { label: (() => ({ nope: true })) as unknown as (b: number) => string },
+    );
+    m.boot(1n);
+    m.present(NO_DRAW, 0);
+    expect(got).toBe("");
+  });
+
+  it("cannot write the arena, and asking for a label is not a write", () => {
+    const s = spyUi();
+    const m = createMachine(
+      cartOf({
+        tick: (sim) => sim.mem.setFloat64(0, sim.mem.getFloat64(0, true) + sim.rndf(), true),
+        render: (_s, _d, _a, ui) => void ui.label(BUTTON.A),
+      }),
+      nullSnd(),
+      s.ui,
+    );
+    m.boot(9n);
+    for (let i = 0; i < 10; i++) {
+      m.step(emptyInput());
+      // The seal is armed: a write from render, by any route, faults here.
+      expect(() => m.present(NO_DRAW, 0.5)).not.toThrow();
+    }
+    expect(s.asked.length).toBe(10);
+  });
+
+  it("leaves the arena byte-identical however the buttons are labelled", () => {
+    // THE LOAD-BEARING ONE, and the reason a device-dependent string is allowed
+    // to exist at all: a console with a gamepad answers "A" where a keyboard
+    // answers "Z", and the simulation must not be able to tell.
+    const build = (label: (b: number) => string): ReturnType<typeof createMachine> =>
+      createMachine(
+        cartOf({
+          tick: (sim) => sim.mem.setFloat64(0, sim.mem.getFloat64(0, true) + sim.rndf(), true),
+          render: (_s, _d, _a, ui) => void ui.label(BUTTON.A).length,
+        }),
+        nullSnd(),
+        { label },
+      );
+    const a = build(() => "Z");
+    const b = build(() => "(A) THE SOUTH FACE BUTTON");
+    a.boot(3n);
+    b.boot(3n);
+    for (let i = 0; i < 60; i++) {
+      a.step(emptyInput());
+      b.step(emptyInput());
+      a.present(NO_DRAW, 0.25);
+      b.present(NO_DRAW, 0.75);
     }
     expect(a.snapshot()).toEqual(b.snapshot());
   });

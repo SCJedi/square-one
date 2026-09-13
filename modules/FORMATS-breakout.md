@@ -114,14 +114,27 @@ The ball is `NORMAL` or `RED`.
 
 1. Breaking a **type-4 block** sets the ball `RED`.
 2. While `RED`, a red beam is drawn across the screen **below the paddle**, and only then.
-3. `RED` ball touches the **paddle** -> the paddle is destroyed, a life is lost, the ball
-   resets to `NORMAL`.
-4. `RED` ball touches **anything else** — a wall, the ceiling, another block, the beam, a shot
-   — -> it bounces as normal and the ball returns to `NORMAL`.
+3. `RED` ball touches the **paddle** -> the paddle is destroyed and a life is lost. The ball
+   goes with it.
+4. `RED` ball meets a **breakable block** — types 1, 2, 3, 4 and 8 — and **passes through it**,
+   destroying it outright however many hits it had left, **without deflecting**. It keeps going
+   and it stays `RED`.
+5. Walls and the ceiling **bounce** it, and it stays `RED`.
+6. **Type-5 solid and type-6 shielded blocks bounce it**, and it stays `RED`. Those two are the
+   level designer's structure rather than his contents, and a red ball that ate them would clear
+   level 8's shielded wall — the one level built to *require* shooting.
+7. `RED` ball touches the **beam** -> it deflects **and** returns to `NORMAL`. **That is the only
+   thing that clears it.** A shot does not: a shot passes through a red ball and does nothing.
 
-So a red ball is dangerous for exactly one contact, and the player has to do the opposite of
-everything the rest of the game teaches: **get the paddle out of the way.** The beam is the
-safety net under it, and a shot is the way to clear it early once the gun exists.
+So a red ball is a **wrecking ball, and it is clearing the level for you.** The player wants it
+alive and wants it nowhere near the paddle, which is the opposite of everything the rest of the
+game teaches: **steer away from your own ball**, and let the beam under the paddle catch it.
 
 The beam is not a floor. It deflects only a `RED` ball; a normal ball falls straight past it
 and is lost. Otherwise it would remove the only way to die.
+
+**Both modules put the clear in exactly one place.** `deflect` is the only code in either
+console that masks bit 1 off a live ball, and the beam is its only caller; the bounce path does
+not touch the flags byte at all, so a contact added later keeps rule 5 for free. Rule 4 and rule
+6 are one decision too: `damage` answers *whether the ball must bounce*, because what is left of
+a block and whether it stopped you cannot be allowed to become two checks that disagree.

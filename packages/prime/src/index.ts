@@ -45,10 +45,11 @@ export {
   emptyInput,
   createMachine,
   nullSnd,
+  defaultUi,
   setDevChecks,
   devChecksEnabled,
 } from "./sim";
-export type { Draw, InputFrame, Machine, PrimeCart, Sim, SimRead, Snd, SndOpts } from "./sim";
+export type { Draw, InputFrame, Machine, PrimeCart, Sim, SimRead, Snd, SndOpts, Ui } from "./sim";
 
 // --- Sound -----------------------------------------------------------------
 // NON-NORMATIVE, and that is the whole reason it can be synthesised rather than
@@ -59,10 +60,31 @@ export type { Draw, InputFrame, Machine, PrimeCart, Sim, SimRead, Snd, SndOpts }
 export { SFX, SFX_COUNT, BANK_INFO, noteHz, createRecordingSnd, createPrimeAudio, audioAvailable } from "./audio";
 export type { PrimeAudio, PrimeAudioState, RecordingSnd, SndCall } from "./audio";
 
+// The song. Three bands over the ten levels, getting faster as the game gets
+// harder -- and four independent reasons it can never bury the alarm, each of
+// them measured in `test/music.test.ts` rather than asserted. Which band is
+// playing IS simulation state and lives in the cart's arena; nothing below is.
+export {
+  MUSIC,
+  MUSIC_COUNT,
+  MUSIC_LEVEL,
+  MUSIC_CEILING,
+  MUSIC_FADE_FRAMES,
+  BAND_FIRST_LEVEL,
+  SCORE_INFO,
+  bandForLevel,
+  barSeconds,
+  loopSeconds,
+  createMusicScheduler,
+} from "./music";
+export type { BandSpec, MusicScheduler, MusicVoice, VoiceSpec } from "./music";
+
 // --- The shell and the first cart ------------------------------------------
 // The page half: a 60 Hz accumulator, quantized input, a real pause button, and
 // the cart the whole slice exists to make playable.
-export { createPrimePlayer, createInputReader, KEYMAP, BTN } from "./player";
+// `keyboardUi` is the console's answer to "what is this button called": derived
+// from KEYMAP, so a cart's prompt can never name a key that does something else.
+export { createPrimePlayer, createInputReader, keyboardUi, KEYMAP, BTN } from "./player";
 export type { PrimePlayer, PrimePlayerOptions, InputReader } from "./player";
 export { breakoutCart } from "./carts/breakout";
 
